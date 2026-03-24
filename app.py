@@ -8,7 +8,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- CONFIGURACIÓN DE RUTAS (MAXIHERAS) ---
+# --- CONFIGURACIÓN DE RUTAS (USUARIO: MaxiHeras) ---
 USUARIO_GITHUB = "MaxiHeras"
 REPO_GITHUB = "diccionario-acordes"
 # -------------------------------------------
@@ -54,7 +54,7 @@ try:
     # 5. MOSTRAR RESULTADOS
     if not df_filtrado.empty:
         for _, row in df_filtrado.iterrows():
-            # Título del acorde (ej: C MAYOR)
+            # Título del acorde
             with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=True):
                 col_info, col_img = st.columns([1, 1])
                 
@@ -65,18 +65,18 @@ try:
                     st.info(f"**Estructura (Intervalos):** {row['Int_IVAN']}")
                 
                 with col_img:
-                    # LÓGICA DE IMAGEN MEJORADA
+                    # LÓGICA DE IMAGEN AJUSTADA A TUS CARPETAS
                     if pd.notna(row['Diagrama1']):
-                        # Limpiamos el nombre: sacamos solo el archivo (ej: C-MAY-1.png)
+                        # Extraemos solo el nombre del archivo (ej: C-MAY-1.png)
                         nombre_archivo = str(row['Diagrama1']).split('/')[-1]
                         
-                        # Usamos el nombre de la carpeta (Naturaleza) exactamente como está en el Excel
+                        # La carpeta es la 'Naturaleza' (ej: MAYORES, MENORES, etc.)
                         carpeta = str(row['Naturaleza']).strip()
                         
                         # URL de GitHub Raw para tu usuario MaxiHeras
                         url_final_img = f"https://raw.githubusercontent.com/{USUARIO_GITHUB}/{REPO_GITHUB}/main/{carpeta}/{nombre_archivo}"
                         
-                        # Mostramos la imagen con un control de error por si la ruta no existe
+                        # Mostramos la imagen
                         st.image(url_final_img, caption=f"Diagrama: {row['Raiz']} {row['Naturaleza']}", use_container_width=True)
                     else:
                         st.warning("No hay diagrama disponible para este acorde.")
@@ -89,4 +89,4 @@ except Exception as e:
 
 # PIE DE PÁGINA
 st.divider()
-st.caption("Actualizado automáticamente desde Google Sheets | Desarrollado por MaxiHeras")
+st.caption(f"Actualizado automáticamente desde Google Sheets | Desarrollado por {USUARIO_GITHUB}")
