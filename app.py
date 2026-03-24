@@ -1,11 +1,22 @@
 import streamlit as st
 import pandas as pd
 
-# 1. ESTADO Y CONFIGURACIÓN (Oculta la barra al iniciar)
+# 1. ESTADO Y CONFIGURACIÓN
 if 'sb_state' not in st.session_state:
     st.session_state.sb_state = "expanded"
 
 st.set_page_config(page_title="Acordes", layout="wide", initial_sidebar_state=st.session_state.sb_state)
+
+# --- CSS PARA MODO OSCURO (Invierte colores de diagramas) ---
+st.markdown("""
+    <style>
+    @media (prefers-color-scheme: dark) {
+        .chord-img { filter: invert(1) hue-rotate(180deg); }
+    }
+    .scroll-container { display: flex; overflow-x: auto; gap: 15px; padding: 10px 0; }
+    .chord-item { flex: 0 0 auto; text-align: center; }
+    </style>
+""", unsafe_allow_html=True)
 
 # --- DATOS Y QR ---
 URL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
@@ -40,13 +51,12 @@ if df is not None:
 
     # 3. RESULTADOS
     if n_sel:
-        # Forzar ocultamiento si hay selección
         st.session_state.sb_state = "collapsed"
         
         for _, row in df_r[df_r['Naturaleza'].isin(n_sel)].iterrows():
             with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=True):
-                # NOTAS CON SEPARADOR " - "
-                ns = [str(row[c]).strip() for c in ['N1','N2','N3','N4'] if c in row and pd.notna(row[c]) and str(row[c]).lower()!='nan']
+                # NOTAS
+                ns = [str(row[c]).strip() for c in ['N1','N2','N3','N4'] if c in row and pd.notna(row[c]) and str(row[c]).lower()!='nan' and str(row[c])!='']
                 st.write(f"**Notas:** {' - '.join(ns)}")
 
                 # INTERVALOS
@@ -57,18 +67,21 @@ if df is not None:
                 st.write("---")
                 st.subheader("Posiciones")
 
-                # GALERÍA HORIZONTAL (SCROLL EN MÓVIL)
+                # GALERÍA HORIZONTAL OPTIMIZADA
                 imgs = []
                 for i in range(1, 10):
                     c = f'Diagrama{i}'
-                    if c in row and pd.notna(row[c]) and str(row[c]) not in ["0","nan",""]:
+                    val = str(row.get(c, '0')).strip().lower()
+                    # FILTRO ESTRICTO: Solo agrega si hay un nombre de archivo real
+                    if pd.notna(row.get(c)) and val not in ["0", "nan", "", "none"]:
                         f = str(row[c]).split('/')[-1]
-                        imgs.append(f"https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main/{row['Naturaleza']}/{f}")
+                        url = f"https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main/{row['Naturaleza']}/{f}"
+                        imgs.append(url)
 
                 if imgs:
-                    h_items = "".join([f'<div style="flex:0 0 auto;text-align:center;margin-right:15px;"><img src="{u}" width="115"><p style="font-size:12px;color:gray;">P{i+1}</p></div>' for i, u in enumerate(imgs)])
-                    st.markdown(f'<div style="display:flex;overflow-x:auto;padding:10px 0;">{h_items}</div>', unsafe_allow_html=True)
+                    h_items = "".join([f'<div class="chord-item"><img src="{u}" class="chord-img" width="115"><p style="font-size:12px;color:gray;">P{i+1}</p></div>' for i, u in enumerate(imgs)])
+                    st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
     else:
         st.info("Configurá tu acorde en el menú lateral.")
 else:
-    st.error("Error al conectar con el Excel. Reintentá en unos segundos.")
+    st.error("Error al conectar con el Excel.")
