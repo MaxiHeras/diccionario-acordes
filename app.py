@@ -53,7 +53,6 @@ if df is not None:
     extras_nat = [n for n in opciones_reales if n not in orden_deseado]
     lista_final_opciones = lista_ordenada + sorted(extras_nat)
 
-    # AQUÍ ESTABA EL ERROR (nat_sel corregido)
     nat_sel = st.sidebar.multiselect(
         "Tipo de Acorde:", 
         options=lista_final_opciones, 
@@ -72,6 +71,7 @@ if df is not None:
         
         for _, row in df_filtrado.iterrows():
             with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=True):
-                # Notas
+                # --- CORRECCIÓN DE NOTAS (LÍNEA 77) ---
                 n4_val = str(row['N4']) if 'N4' in row else 'nan'
-                notas_str = f"{row['N1']}, {row
+                notas_str = f"{row['N1']}, {row['N2']}, {row['N3']}"
+                if n4_val.lower() != 'nan' and
