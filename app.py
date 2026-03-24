@@ -17,6 +17,8 @@ URL_SHEET = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:
 def cargar_datos():
     try:
         df = pd.read_csv(URL_SHEET)
+        # Limpieza profunda de nombres de columnas para asegurar que Int_TRAD sea detectable
+        df.columns = [str(c).strip() for c in df.columns]
         return df
     except:
         return None
@@ -24,8 +26,7 @@ def cargar_datos():
 df = cargar_datos()
 
 if df is not None:
-    # Limpieza de datos crítica para que aparezcan las columnas
-    df.columns = df.columns.str.strip() # Quita espacios en los nombres de columnas
+    # Limpieza de datos de las celdas
     df['Raiz'] = df['Raiz'].astype(str).str.strip()
     df['Naturaleza'] = df['Naturaleza'].astype(str).str.strip()
 
@@ -35,7 +36,7 @@ if df is not None:
     # 3. BARRA LATERAL
     st.sidebar.header("🔍 Buscar Acorde")
     
-    # ORDEN MUSICAL
+    # ORDEN MUSICAL (C, D, E, F, G, A, B)
     orden_notas_musical = ["C", "C#", "Db", "D", "D#", "Eb", "E", "F", "F#", "Gb", "G", "G#", "Ab", "A", "A#", "Bb", "B"]
     raices_presentes = df['Raiz'].unique()
     lista_raices_final = [n for n in orden_notas_musical if n in raices_presentes]
@@ -60,20 +61,23 @@ if df is not None:
         
         for _, row in df_filtrado.iterrows():
             with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=True):
-                # NOTAS
-                n4 = str(row['N4']) if 'N4' in row else 'nan'
-                notas_txt = f"{row['N1']}, {row['N2']}, {row['N3']}"
-                if n4.lower() != 'nan' and n4.strip() != "":
-                    notas_txt += f", {n4}"
+                
+                # --- NOTAS SEPARADAS POR GUION ---
+                notas_lista = [str(row['N1']), str(row['N2']), str(row['N3'])]
+                if 'N4' in row and pd.notna(row['N4']) and str(row['N4']).lower() != 'nan':
+                    notas_lista.append(str(row['N4']))
+                
+                notas_txt = " - ".join([n.strip() for n in notas_lista if n.strip() != ""])
                 st.write(f"**Notas:** {notas_txt}")
 
-                # --- INTERVALOS (CORRECCIÓN TOTAL) ---
+                # --- INTERVALOS (INT_IVAN E INT_TRAD) ---
                 st.info(f"**Int_IVAN:** {row['Int_IVAN']}")
                 
-                # Forzamos la visualización de Int_TRAD si existe valor
-                val_trad = str(row.get('Int_TRAD', 'nan')).strip()
-                if val_trad.lower() != 'nan' and val_trad != "":
-                     st.info(f"**Int_TRAD:** {val_trad}")
+                # Intento robusto de mostrar Int_TRAD
+                if 'Int_TRAD' in row:
+                    val_trad = str(row['Int_TRAD']).strip()
+                    if val_trad.lower() != 'nan' and val_trad != "":
+                        st.info(f"**Int_TRAD:** {val_trad}")
                 
                 st.write("---")
                 st.subheader("Posiciones")
@@ -90,15 +94,5 @@ if df is not None:
                             lista_imgs.append(url)
 
                 if lista_imgs:
-                    # CONFIGURACIÓN PARA CELULAR: Imágenes de 100px para que entren varias por fila
-                    cols = st.columns(len(lista_imgs))
-                    for idx, url in enumerate(lista_imgs):
-                        with cols[idx]:
-                            st.image(url, width=100) # Tamaño reducido para comodidad
-                            st.caption(f"P{idx+1}")
-                else:
-                    st.warning("No hay diagramas.")
-    else:
-        st.info("👋 Selecciona un acorde a la izquierda.")
-else:
-    st.error("Error al conectar con la base de datos.")
+                    # MODO MÓVIL: Columnas de ancho fijo (110px) para que entren varias de lado
+                    #
