@@ -2,53 +2,59 @@ import streamlit as st
 import pandas as pd
 
 # 1. CONFIGURACIÓN DE LA PÁGINA
-st.set_page_config(page_title="Diccionario de Acordes", page_icon="🎸", layout="wide")
+st.set_page_config(
+    page_title="Diccionario de Acordes",
+    page_icon="🎸",
+    layout="wide"
+)
 
-# --- CONFIGURACIÓN ---
+# --- DATOS DE TU CUENTA (Asegúrate de que sean exactos) ---
 USUARIO_GITHUB = "MaxiHeras"
 REPO_GITHUB = "diccionario-acordes"
 URL_APP = "https://diccionario-acordes-okhwulgyz9ueachvkdfh26.streamlit.app/"
 
-# 2. CARGA DE DATOS
+# 2. CONEXIÓN CON GOOGLE SHEET
 SHEET_ID = "1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno"
 URL_SHEET = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv"
 
 @st.cache_data
 def cargar_datos():
-    return pd.read_csv(URL_SHEET)
+    # Cargamos el CSV y limpiamos los nombres de las columnas por si acaso
+    df = pd.read_csv(URL_SHEET)
+    return df
 
 try:
     df = cargar_datos()
+    
+    # LIMPIEZA DE DATOS (Para evitar errores de espacios o números)
+    df['Raiz'] = df['Raiz'].astype(str).str.strip()
+    df['Naturaleza'] = df['Naturaleza'].astype(str).str.strip()
+    if 'Diagrama1' in df.columns:
+        df['Diagrama1'] = df['Diagrama1'].astype(str).str.strip()
+
+    # TÍTULO PRINCIPAL
     st.title("🎸 Diccionario de Acordes")
+    st.markdown("Herramienta interactiva para alumnos de guitarra.")
     st.divider()
 
-    # 3. BARRA LATERAL
+    # 3. BARRA LATERAL (FILTROS Y QR)
     st.sidebar.header("🔍 Buscar Acorde")
-    raiz_sel = st.sidebar.selectbox("Selecciona la Nota Raíz:", sorted(df['Raiz'].unique()))
     
+    # Filtro de Nota Raíz
+    lista_raices = sorted(df['Raiz'].unique())
+    raiz_sel = st.sidebar.selectbox("Selecciona la Nota Raíz:", lista_raices)
+    
+    # Filtrar naturalezas disponibles para esa nota
     df_raiz = df[df['Raiz'] == raiz_sel]
-    nat_sel = st.sidebar.multiselect("Tipo:", options=sorted(df_raiz['Naturaleza'].unique()), default=sorted(df_raiz['Naturaleza'].unique()))
+    lista_naturalezas = sorted(df_raiz['Naturaleza'].unique())
+    
+    nat_sel = st.sidebar.multiselect(
+        "Tipo de Acorde:", 
+        options=lista_naturalezas, 
+        default=lista_naturalezas
+    )
 
-    # --- CÓDIGO QR SEGURO ---
+    # --- CÓDIGO QR SEGURO (Sin librerías extra) ---
     st.sidebar.write("---")
     st.sidebar.write("### 📲 Comparte la App")
-    # Usamos un servicio externo confiable para generar el QR sin instalar nada
-    qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={URL_APP}"
-    st.sidebar.image(qr_url, caption="Escanea para entrar")
-
-    # 4. RESULTADOS
-    df_filtrado = df_raiz[df_raiz['Naturaleza'].isin(nat_sel)]
-    for _, row in df_filtrado.iterrows():
-        with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=True):
-            col1, col2 = st.columns([1, 1])
-            with col1:
-                st.write(f"**Notas:** {row['N1']}, {row['N2']}, {row['N3']}, {row['N4'] if pd.notna(row['N4']) else ''}")
-                st.info(f"**Intervalos:** {row['Int_IVAN']}")
-            with col2:
-                if pd.notna(row['Diagrama1']):
-                    nombre_archivo = str(row['Diagrama1']).split('/')[-1]
-                    url_img = f"https://raw.githubusercontent.com/{USUARIO_GITHUB}/{REPO_GITHUB}/main/{str(row['Naturaleza']).strip()}/{nombre_archivo}"
-                    st.image(url_img)
-
-except Exception as e:
-    st.error(f"Error al cargar: {e}")
+    qr_url = f"
