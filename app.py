@@ -8,9 +8,9 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- CONFIGURACIÓN DE RUTAS (EDITA ESTO) ---
-USUARIO_GITHUB = "MaxiHeras"  # <--- CAMBIA ESTO
-REPO_GITHUB = "diccionario-acordes"      # <--- CAMBIA ESTO SI ES OTRO
+# --- CONFIGURACIÓN DE RUTAS (MAXIHERAS) ---
+USUARIO_GITHUB = "MaxiHeras"
+REPO_GITHUB = "diccionario-acordes"
 # -------------------------------------------
 
 # 2. CONEXIÓN CON GOOGLE SHEET
@@ -39,7 +39,6 @@ try:
     raiz_sel = st.sidebar.selectbox("Selecciona la Nota Raíz:", lista_raices)
     
     # Filtro de Naturaleza (Tipo de Acorde)
-    # Filtramos las opciones disponibles solo para esa raíz
     df_raiz = df[df['Raiz'] == raiz_sel]
     lista_naturalezas = sorted(df_raiz['Naturaleza'].unique())
     
@@ -54,8 +53,8 @@ try:
 
     # 5. MOSTRAR RESULTADOS
     if not df_filtrado.empty:
-        # Usamos columnas para que no se vea todo hacia abajo
         for _, row in df_filtrado.iterrows():
+            # Título del acorde (ej: C MAYOR)
             with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=True):
                 col_info, col_img = st.columns([1, 1])
                 
@@ -63,26 +62,26 @@ try:
                     st.subheader("Información Técnica")
                     st.write(f"**Estado:** {row['Estado']}")
                     st.write(f"**Notas:** {row['N1']}, {row['N2']}, {row['N3']}, {row['N4'] if pd.notna(row['N4']) else ''}")
-                    st.info(f"**Intervalos:** {row['Int_IVAN']}")
+                    st.info(f"**Estructura (Intervalos):** {row['Int_IVAN']}")
                 
                 with col_img:
-                    # LÓGICA PARA CARGAR LA IMAGEN DESDE GITHUB
+                    # LÓGICA DE IMAGEN MEJORADA
                     if pd.notna(row['Diagrama1']):
-                        # Limpiamos el nombre: extraemos solo el archivo (ej: C-MAY-1.png)
+                        # Limpiamos el nombre: sacamos solo el archivo (ej: C-MAY-1.png)
                         nombre_archivo = str(row['Diagrama1']).split('/')[-1]
                         
-                        # La carpeta es la 'Naturaleza' (ej: MAYORES)
+                        # Usamos el nombre de la carpeta (Naturaleza) exactamente como está en el Excel
                         carpeta = str(row['Naturaleza']).strip()
                         
-                        # Construimos la URL de GitHub Raw
+                        # URL de GitHub Raw para tu usuario MaxiHeras
                         url_final_img = f"https://raw.githubusercontent.com/{USUARIO_GITHUB}/{REPO_GITHUB}/main/{carpeta}/{nombre_archivo}"
                         
-                        # Mostramos la imagen
+                        # Mostramos la imagen con un control de error por si la ruta no existe
                         st.image(url_final_img, caption=f"Diagrama: {row['Raiz']} {row['Naturaleza']}", use_container_width=True)
                     else:
                         st.warning("No hay diagrama disponible para este acorde.")
     else:
-        st.info("Selecciona al menos un tipo de acorde en el menú lateral para ver los resultados.")
+        st.info("Selecciona al menos un tipo de acorde en el menú lateral.")
 
 except Exception as e:
     st.error("No se pudo cargar la base de datos.")
@@ -90,4 +89,4 @@ except Exception as e:
 
 # PIE DE PÁGINA
 st.divider()
-st.caption("Actualizado automáticamente desde Google Sheets.")
+st.caption("Actualizado automáticamente desde Google Sheets | Desarrollado por MaxiHeras")
