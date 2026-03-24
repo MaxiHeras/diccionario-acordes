@@ -2,110 +2,74 @@ import streamlit as st
 import pandas as pd
 
 # 1. CONFIGURACIÓN Y ESTADO
-if 'sidebar_state' not in st.session_state:
-    st.session_state.sidebar_state = "expanded"
+if 'sb_state' not in st.session_state:
+    st.session_state.sb_state = "expanded"
 
-st.set_page_config(
-    page_title="Diccionario de Acordes", 
-    layout="wide", 
-    initial_sidebar_state=st.session_state.sidebar_state
-)
+st.set_page_config(page_title="Acordes", layout="wide", initial_sidebar_state=st.session_state.sb_state)
 
-# --- DATOS ---
-USUARIO_GITHUB = "MaxiHeras"
-REPO_GITHUB = "diccionario-acordes"
-URL_SHEET = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
+# --- CARGA DE DATOS ---
+URL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
 
 @st.cache_data
-def cargar_datos():
+def load():
     try:
-        df = pd.read_csv(URL_SHEET)
+        df = pd.read_csv(URL)
         df.columns = [str(c).strip() for c in df.columns]
         return df
-    except:
-        return None
+    except: return None
 
-df = cargar_datos()
+df = load()
 
 if df is not None:
-    st.title("🎸 Diccionario de Acordes")
-    
     # 2. BARRA LATERAL
     with st.sidebar:
-        st.header("🔍 Buscar Acorde")
+        st.header("🔍 Buscar")
+        raiz_sel = st.selectbox("Nota Raíz:", sorted(df['Raiz'].unique()))
+        df_r = df[df['Raiz'] == raiz_sel]
+        nat_sel = st.multiselect("Tipo:", options=df_r['Naturaleza'].unique())
         
-        # Selectores
-        raices = sorted(df['Raiz'].unique())
-        raiz_sel = st.selectbox("Nota Raíz:", raices)
-        df_raiz = df[df['Raiz'] == raiz_sel]
+        for _ in range(10): st.write("") # Espaciado al fondo
         
-        nat_sel = st.multiselect("Tipo de Acorde:", options=df_raiz['Naturaleza'].unique())
-        
-        # Espacio para empujar el botón al fondo (Cerca del borde inferior)
-        for _ in range(12):
-            st.write("") 
-
-        # BOTÓN FINAL
         if st.button("Mostrar acordes", use_container_width=True, type="primary"):
             if nat_sel:
-                st.session_state.sidebar_state = "collapsed"
+                st.session_state.sb_state = "collapsed"
                 st.rerun()
-            else:
-                st.warning("Elegí un acorde.")
+            else: st.warning("Elegí un tipo")
 
-    # 3. MOSTRAR RESULTADOS
+    # 3. RESULTADOS
     if nat_sel:
-        # Botón auxiliar por si se oculta la barra y quieres volver
-        if st.session_state.sidebar_state == "collapsed":
+        if st.session_state.sb_state == "collapsed":
             if st.button("⬅️ Cambiar Selección"):
-                st.session_state.sidebar_state = "expanded"
+                st.session_state.sb_state = "expanded"
                 st.rerun()
 
-        df_filtrado = df_raiz[df_raiz['Naturaleza'].isin(nat_sel)]
-        
-        for _, row in df_filtrado.iterrows():
+        for _, row in df_r[df_r['Naturaleza'].isin(nat_sel)].iterrows():
             with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=True):
-                
-                # Notas con separador " - "
-                columnas_n = ['N1', 'N2', 'N3', 'N4']
-                notas_list = []
-                for c in columnas_n:
-                    val = str(row.get(c, 'nan')).strip()
-                    if val.lower() != 'nan' and val != "":
-                        notas_list.append(val)
-                
-                st.write(f"**Notas:** {' - '.join(notas_list)}")
+                # NOTAS CON GUION
+                ns = [str(row[c]).strip() for c in ['N1','N2','N3','N4'] if c in row and pd.notna(row[c]) and str(row[c]).lower()!='nan']
+                st.write(f"**Notas:** {' - '.join(ns)}")
 
-                # Intervalos
+                # INTERVALOS
                 st.info(f"**Int_IVAN:** {row.get('Int_IVAN', '')}")
-                
                 if 'Int_TRAD' in row and pd.notna(row['Int_TRAD']):
                     st.info(f"**Int_TRAD:** {row['Int_TRAD']}")
                 
                 st.write("---")
-                st.subheader("Posiciones")
-                
-                # Imágenes compactas para celular
+                # IMÁGENES COMPACTAS (105px)
                 imgs = []
                 for i in range(1, 10):
-                    col_name = f'Diagrama{i}'
-                    if col_name in row and pd.notna(row[col_name]):
-                        img_val = str(row[col_name]).strip()
-                        if img_val not in ["0", "nan", ""]:
-                            filename = img_val.split('/')[-1]
-                            url = f"https://raw.githubusercontent.com/{USUARIO_GITHUB}/{REPO_GITHUB}/main/{row['Naturaleza']}/{filename}"
-                            imgs.append(url)
+                    c = f'Diagrama{i}'
+                    if c in row and pd.notna(row[c]) and str(row[c]) not in ["0","nan",""]:
+                        f = str(row[c]).split('/')[-1]
+                        imgs.append(f"https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main/{row['Naturaleza']}/{f}")
 
                 if imgs:
-                    # Crea solo las columnas que tienen fotos para evitar errores visuales
                     cols = st.columns(len(imgs))
                     for idx, url in enumerate(imgs):
                         with cols[idx]:
                             st.image(url, width=105)
                             st.caption(f"P{idx+1}")
-                else:
-                    st.warning("Sin diagramas.")
     else:
         st.info("Configurá tu acorde a la izquierda.")
 else:
-    st.error("Error
+    st.error("Error de conexión.")
