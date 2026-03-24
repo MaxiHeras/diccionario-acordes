@@ -17,7 +17,7 @@ URL_SHEET = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:
 def cargar_datos():
     try:
         df = pd.read_csv(URL_SHEET)
-        # Limpieza profunda de nombres de columnas para asegurar que Int_TRAD sea detectable
+        # Limpieza de nombres de columnas para asegurar detección de Int_TRAD
         df.columns = [str(c).strip() for c in df.columns]
         return df
     except:
@@ -26,7 +26,7 @@ def cargar_datos():
 df = cargar_datos()
 
 if df is not None:
-    # Limpieza de datos de las celdas
+    # Limpieza de datos de celdas
     df['Raiz'] = df['Raiz'].astype(str).str.strip()
     df['Naturaleza'] = df['Naturaleza'].astype(str).str.strip()
 
@@ -63,21 +63,23 @@ if df is not None:
             with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=True):
                 
                 # --- NOTAS SEPARADAS POR GUION ---
-                notas_lista = [str(row['N1']), str(row['N2']), str(row['N3'])]
-                if 'N4' in row and pd.notna(row['N4']) and str(row['N4']).lower() != 'nan':
-                    notas_lista.append(str(row['N4']))
+                notas_lista = []
+                for n_col in ['N1', 'N2', 'N3', 'N4']:
+                    if n_col in row and pd.notna(row[n_col]):
+                        val_n = str(row[n_col]).strip()
+                        if val_n.lower() != 'nan' and val_n != "":
+                            notas_lista.append(val_n)
                 
-                notas_txt = " - ".join([n.strip() for n in notas_lista if n.strip() != ""])
+                notas_txt = " - ".join(notas_lista)
                 st.write(f"**Notas:** {notas_txt}")
 
                 # --- INTERVALOS (INT_IVAN E INT_TRAD) ---
                 st.info(f"**Int_IVAN:** {row['Int_IVAN']}")
                 
-                # Intento robusto de mostrar Int_TRAD
-                if 'Int_TRAD' in row:
-                    val_trad = str(row['Int_TRAD']).strip()
-                    if val_trad.lower() != 'nan' and val_trad != "":
-                        st.info(f"**Int_TRAD:** {val_trad}")
+                # Verificación robusta para Int_TRAD
+                val_trad = str(row.get('Int_TRAD', 'nan')).strip()
+                if val_trad.lower() != 'nan' and val_trad != "":
+                    st.info(f"**Int_TRAD:** {val_trad}")
                 
                 st.write("---")
                 st.subheader("Posiciones")
@@ -87,12 +89,22 @@ if df is not None:
                 for i in range(1, 10):
                     col = f'Diagrama{i}'
                     if col in row and pd.notna(row[col]):
-                        val = str(row[col]).strip()
-                        if val not in ["", "nan", "0"]:
-                            archivo = val.split('/')[-1]
+                        val_img = str(row[col]).strip()
+                        if val_img not in ["", "nan", "0"]:
+                            archivo = val_img.split('/')[-1]
                             url = f"https://raw.githubusercontent.com/{USUARIO_GITHUB}/{REPO_GITHUB}/main/{row['Naturaleza']}/{archivo}"
                             lista_imgs.append(url)
 
                 if lista_imgs:
-                    # MODO MÓVIL: Columnas de ancho fijo (110px) para que entren varias de lado
-                    #
+                    # Columnas de ancho fijo (110px) para que entren varias en móviles
+                    cols = st.columns(len(lista_imgs))
+                    for idx, url in enumerate(lista_imgs):
+                        with cols[idx]:
+                            st.image(url, width=110) 
+                            st.caption(f"P{idx+1}")
+                else:
+                    st.warning("No hay diagramas.")
+    else:
+        st.info("👋 Selecciona un acorde a la izquierda.")
+else:
+    st.error("Error al conectar con la base de datos.")
