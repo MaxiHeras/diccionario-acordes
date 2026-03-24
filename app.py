@@ -34,27 +34,44 @@ if df is not None:
     # 3. BARRA LATERAL
     st.sidebar.header("🔍 Buscar Acorde")
     
-    # --- ORDEN MUSICAL (C, D, E, F, G, A, B) ---
-    # Definimos el orden lógico para que no empiece por la 'A'
+    # ORDEN MUSICAL (C, D, E, F, G, A, B)
     orden_notas_musical = ["C", "C#", "Db", "D", "D#", "Eb", "E", "F", "F#", "Gb", "G", "G#", "Ab", "A", "A#", "Bb", "B"]
     raices_presentes = df['Raiz'].unique()
-    
-    # Creamos la lista final siguiendo el orden musical definido arriba
     lista_raices_final = [n for n in orden_notas_musical if n in raices_presentes]
-    # Si hay alguna nota en el Excel que no pusimos en la lista, la agregamos al final
     extras_notas = sorted([n for n in raices_presentes if n not in orden_notas_musical])
     lista_raices_final += extras_notas
 
     raiz_sel = st.sidebar.selectbox("Selecciona la Nota Raíz:", lista_raices_final)
     
-    # Filtrar naturalezas disponibles para esa nota
+    # Filtrar naturalezas para esa nota
     df_raiz = df[df['Raiz'] == raiz_sel]
     
-    # ORDEN DE NATURALEZA (MAYOR primero, etc.)
+    # ORDEN DE NATURALEZA
     orden_deseado = ["MAYOR", "MENOR", "DOMINANTE", "AUMENTADO", "DISMINUIDO", "SEMIDISMINUIDO", "MAJ7", "MENOR7"]
     opciones_reales = df_raiz['Naturaleza'].unique()
     lista_ordenada = [n for n in orden_deseado if n in opciones_reales]
     extras_nat = [n for n in opciones_reales if n not in orden_deseado]
     lista_final_opciones = lista_ordenada + sorted(extras_nat)
 
-    nat_sel = st.
+    # AQUÍ ESTABA EL ERROR (nat_sel corregido)
+    nat_sel = st.sidebar.multiselect(
+        "Tipo de Acorde:", 
+        options=lista_final_opciones, 
+        default=[], 
+        placeholder="Elegí un tipo..."
+    )
+
+    # QR en la sidebar
+    st.sidebar.write("---")
+    st.sidebar.write("### 📲 Comparte la App")
+    st.sidebar.image(f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={URL_APP}")
+
+    # 4. MOSTRAR RESULTADOS
+    if nat_sel:
+        df_filtrado = df_raiz[df_raiz['Naturaleza'].isin(nat_sel)]
+        
+        for _, row in df_filtrado.iterrows():
+            with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=True):
+                # Notas
+                n4_val = str(row['N4']) if 'N4' in row else 'nan'
+                notas_str = f"{row['N1']}, {row
