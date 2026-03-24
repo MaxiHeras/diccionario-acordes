@@ -24,7 +24,8 @@ def cargar_datos():
 df = cargar_datos()
 
 if df is not None:
-    # Limpieza de datos básica
+    # Limpieza de datos crítica para que aparezcan las columnas
+    df.columns = df.columns.str.strip() # Quita espacios en los nombres de columnas
     df['Raiz'] = df['Raiz'].astype(str).str.strip()
     df['Naturaleza'] = df['Naturaleza'].astype(str).str.strip()
 
@@ -34,7 +35,7 @@ if df is not None:
     # 3. BARRA LATERAL
     st.sidebar.header("🔍 Buscar Acorde")
     
-    # ORDEN MUSICAL (C, D, E, F, G, A, B)
+    # ORDEN MUSICAL
     orden_notas_musical = ["C", "C#", "Db", "D", "D#", "Eb", "E", "F", "F#", "Gb", "G", "G#", "Ab", "A", "A#", "Bb", "B"]
     raices_presentes = df['Raiz'].unique()
     lista_raices_final = [n for n in orden_notas_musical if n in raices_presentes]
@@ -42,7 +43,6 @@ if df is not None:
     lista_raices_final += extras_notas
 
     raiz_sel = st.sidebar.selectbox("Selecciona la Nota Raíz:", lista_raices_final)
-    
     df_raiz = df[df['Raiz'] == raiz_sel]
     
     # ORDEN DE NATURALEZA
@@ -52,16 +52,7 @@ if df is not None:
     extras_nat = [n for n in opciones_reales if n not in orden_deseado]
     lista_final_opciones = lista_ordenada + sorted(extras_nat)
 
-    nat_sel = st.sidebar.multiselect(
-        "Tipo de Acorde:", 
-        options=lista_final_opciones, 
-        default=[], 
-        placeholder="Elegí un tipo..."
-    )
-
-    st.sidebar.write("---")
-    st.sidebar.write("### 📲 Comparte la App")
-    st.sidebar.image(f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={URL_APP}")
+    nat_sel = st.sidebar.multiselect("Tipo de Acorde:", options=lista_final_opciones, default=[], placeholder="Elegí un tipo...")
 
     # 4. MOSTRAR RESULTADOS
     if nat_sel:
@@ -69,47 +60,45 @@ if df is not None:
         
         for _, row in df_filtrado.iterrows():
             with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=True):
-                # Notas
-                n4_val = str(row['N4']) if 'N4' in row else 'nan'
-                notas_str = f"{row['N1']}, {row['N2']}, {row['N3']}"
-                if n4_val.lower() != 'nan' and n4_val.strip() != "":
-                    notas_str += f", {n4_val}"
-                st.write(f"**Notas:** {notas_str}")
+                # NOTAS
+                n4 = str(row['N4']) if 'N4' in row else 'nan'
+                notas_txt = f"{row['N1']}, {row['N2']}, {row['N3']}"
+                if n4.lower() != 'nan' and n4.strip() != "":
+                    notas_txt += f", {n4}"
+                st.write(f"**Notas:** {notas_txt}")
 
-                # --- ETIQUETAS DE INTERVALOS CORREGIDAS ---
+                # --- INTERVALOS (CORRECCIÓN TOTAL) ---
                 st.info(f"**Int_IVAN:** {row['Int_IVAN']}")
                 
-                if 'Int_TRAD' in row and pd.notna(row['Int_TRAD']):
-                     st.info(f"**Int_TRAD:** {row['Int_TRAD']}")
+                # Forzamos la visualización de Int_TRAD si existe valor
+                val_trad = str(row.get('Int_TRAD', 'nan')).strip()
+                if val_trad.lower() != 'nan' and val_trad != "":
+                     st.info(f"**Int_TRAD:** {val_trad}")
                 
                 st.write("---")
                 st.subheader("Posiciones")
                 
                 # RECOLECCIÓN DE IMÁGENES
-                lista_imagenes = []
+                lista_imgs = []
                 for i in range(1, 10):
                     col = f'Diagrama{i}'
                     if col in row and pd.notna(row[col]):
                         val = str(row[col]).strip()
-                        if val != "" and val.lower() != 'nan' and val != '0':
+                        if val not in ["", "nan", "0"]:
                             archivo = val.split('/')[-1]
-                            url_img = f"https://raw.githubusercontent.com/{USUARIO_GITHUB}/{REPO_GITHUB}/main/{row['Naturaleza']}/{archivo}"
-                            lista_imagenes.append(url_img)
+                            url = f"https://raw.githubusercontent.com/{USUARIO_GITHUB}/{REPO_GITHUB}/main/{row['Naturaleza']}/{archivo}"
+                            lista_imgs.append(url)
 
-                if lista_imagenes:
-                    # --- MEJORA PARA MÓVIL: COLUMNAS MÁS PEQUEÑAS ---
-                    # Usamos un ancho fijo para que no se estiren demasiado en pantallas grandes
-                    # y se vean una al lado de la otra en móviles
-                    cols = st.columns(len(lista_imagenes))
-                    for idx, url in enumerate(lista_imagenes):
+                if lista_imgs:
+                    # CONFIGURACIÓN PARA CELULAR: Imágenes de 100px para que entren varias por fila
+                    cols = st.columns(len(lista_imgs))
+                    for idx, url in enumerate(lista_imgs):
                         with cols[idx]:
-                            # width=120 asegura que el diagrama sea legible pero no gigante
-                            st.image(url, width=120)
+                            st.image(url, width=100) # Tamaño reducido para comodidad
                             st.caption(f"P{idx+1}")
                 else:
-                    st.warning("No hay diagramas disponibles.")
+                    st.warning("No hay diagramas.")
     else:
-        st.info("👋 Selecciona un **Tipo de Acorde** a la izquierda.")
-
+        st.info("👋 Selecciona un acorde a la izquierda.")
 else:
     st.error("Error al conectar con la base de datos.")
