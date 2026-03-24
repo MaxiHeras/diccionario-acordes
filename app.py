@@ -17,7 +17,7 @@ URL_SHEET = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:
 def cargar_datos():
     try:
         df = pd.read_csv(URL_SHEET)
-        # Limpieza de nombres de columnas para asegurar detección de Int_TRAD
+        # Limpiamos nombres de columnas de espacios o saltos de línea invisibles
         df.columns = [str(c).strip() for c in df.columns]
         return df
     except:
@@ -70,41 +70,13 @@ if df is not None:
                         if val_n.lower() != 'nan' and val_n != "":
                             notas_lista.append(val_n)
                 
-                notas_txt = " - ".join(notas_lista)
+                notas_txt = " - ".join(notas_lista) # Separador solicitado
                 st.write(f"**Notas:** {notas_txt}")
 
-                # --- INTERVALOS (INT_IVAN E INT_TRAD) ---
+                # --- INTERVALOS (SOLO Int_IVAN e Int_TRAD) ---
                 st.info(f"**Int_IVAN:** {row['Int_IVAN']}")
                 
-                # Verificación robusta para Int_TRAD
-                val_trad = str(row.get('Int_TRAD', 'nan')).strip()
-                if val_trad.lower() != 'nan' and val_trad != "":
-                    st.info(f"**Int_TRAD:** {val_trad}")
-                
-                st.write("---")
-                st.subheader("Posiciones")
-                
-                # RECOLECCIÓN DE IMÁGENES
-                lista_imgs = []
-                for i in range(1, 10):
-                    col = f'Diagrama{i}'
-                    if col in row and pd.notna(row[col]):
-                        val_img = str(row[col]).strip()
-                        if val_img not in ["", "nan", "0"]:
-                            archivo = val_img.split('/')[-1]
-                            url = f"https://raw.githubusercontent.com/{USUARIO_GITHUB}/{REPO_GITHUB}/main/{row['Naturaleza']}/{archivo}"
-                            lista_imgs.append(url)
-
-                if lista_imgs:
-                    # Columnas de ancho fijo (110px) para que entren varias en móviles
-                    cols = st.columns(len(lista_imgs))
-                    for idx, url in enumerate(lista_imgs):
-                        with cols[idx]:
-                            st.image(url, width=110) 
-                            st.caption(f"P{idx+1}")
-                else:
-                    st.warning("No hay diagramas.")
-    else:
-        st.info("👋 Selecciona un acorde a la izquierda.")
-else:
-    st.error("Error al conectar con la base de datos.")
+                # Ahora que se llama Int_TRAD en el Excel, lo mostramos directamente
+                if 'Int_TRAD' in row:
+                    val_trad = str(row['Int_TRAD']).strip()
+                    if val_trad.lower() != 'nan' and val_trad
