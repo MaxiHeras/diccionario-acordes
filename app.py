@@ -71,7 +71,44 @@ if df is not None:
         
         for _, row in df_filtrado.iterrows():
             with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=True):
-                # --- CORRECCIÓN DE NOTAS (LÍNEA 77) ---
+                # Sección Notas (Corrección de la Línea 77)
                 n4_val = str(row['N4']) if 'N4' in row else 'nan'
                 notas_str = f"{row['N1']}, {row['N2']}, {row['N3']}"
-                if n4_val.lower() != 'nan' and
+                if n4_val.lower() != 'nan' and n4_val.strip() != "":
+                    notas_str += f", {n4_val}"
+                st.write(f"**Notas:** {notas_str}")
+
+                # INTERVALOS
+                st.info(f"**Int_IVAN:** {row['Int_IVAN']}")
+                
+                if 'Int_TRAD' in row and pd.notna(row['Int_TRAD']):
+                     st.info(f"**Intervalos Tradicionales (Int_TRAD):** {row['Int_TRAD']}")
+                
+                st.write("---")
+                st.subheader("Posiciones")
+                
+                # RECOLECCIÓN DE IMÁGENES DINÁMICA
+                lista_imagenes = []
+                for i in range(1, 10):
+                    col = f'Diagrama{i}'
+                    if col in row and pd.notna(row[col]):
+                        val = str(row[col]).strip()
+                        if val != "" and val.lower() != 'nan' and val != '0':
+                            archivo = val.split('/')[-1]
+                            url_img = f"https://raw.githubusercontent.com/{USUARIO_GITHUB}/{REPO_GITHUB}/main/{row['Naturaleza']}/{archivo}"
+                            lista_imagenes.append(url_img)
+
+                if lista_imagenes:
+                    # Se crean solo las columnas necesarias para eliminar fotos vacías (Pos. 4 y 5)
+                    cols = st.columns(len(lista_imagenes))
+                    for idx, url in enumerate(lista_imagenes):
+                        with cols[idx]:
+                            st.image(url, use_container_width=True)
+                            st.caption(f"Pos. {idx+1}")
+                else:
+                    st.warning("No hay diagramas disponibles.")
+    else:
+        st.info("👋 ¡Hola! Selecciona un **Tipo de Acorde** en el menú de la izquierda para empezar.")
+
+else:
+    st.error("Error al conectar con la base de datos.")
