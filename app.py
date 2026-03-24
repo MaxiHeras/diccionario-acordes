@@ -1,8 +1,7 @@
 import streamlit as st
 import pandas as pd
 
-# 1. CONFIGURACIÓN INICIAL
-# Usamos session_state para manejar si la barra debe estar colapsada o no
+# 1. MANEJO DE ESTADO Y CONFIGURACIÓN (Debe ir al principio)
 if 'sidebar_state' not in st.session_state:
     st.session_state.sidebar_state = "expanded"
 
@@ -42,37 +41,42 @@ if df is not None:
         
         nat_sel = st.multiselect("Tipo de Acorde:", options=df_raiz['Naturaleza'].unique())
         
-        st.write("---") # Separador visual
+        # ESPACIADOR PARA EMPUJAR EL BOTÓN AL FONDO
+        # En Streamlit esto crea un espacio flexible
+        for _ in range(15): 
+            st.write("") 
+
         # BOTÓN AL FINAL DE LA BARRA
-        if st.button("Mostrar acordes", use_container_width=True):
+        if st.button("Mostrar acordes", use_container_width=True, type="primary"):
             if nat_sel:
                 st.session_state.sidebar_state = "collapsed"
-                st.rerun() # Recarga para aplicar el cierre de la barra
+                st.rerun()
             else:
-                st.warning("Selecciona al menos un tipo.")
+                st.warning("Selecciona un tipo.")
 
     # 3. RESULTADOS
     if nat_sel:
-        # Botón para volver a mostrar la barra si el usuario lo desea
+        # Botón pequeño en la parte superior para volver a filtrar sin abrir la sidebar manualmente
         if st.session_state.sidebar_state == "collapsed":
-            if st.button("⬅️ Cambiar selección"):
+            if st.button("⬅️ Cambiar Acorde"):
                 st.session_state.sidebar_state = "expanded"
                 st.rerun()
 
-        for _, row in df_raiz[df_raiz['Naturaleza'].isin(nat_sel)].iterrows():
+        df_filtrado = df_raiz[df_raiz['Naturaleza'].isin(nat_sel)]
+        
+        for _, row in df_filtrado.iterrows():
             with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=True):
                 
                 # NOTAS CON SEPARADOR " - "
                 columnas_notas = ['N1', 'N2', 'N3', 'N4']
                 notas = [str(row[c]).strip() for c in columnas_notas if c in row and pd.notna(row[c]) and str(row[c]).lower() != 'nan']
-                st.write(f"**Notas:** {' - '.join(notas)}") #
+                st.write(f"**Notas:** {' - '.join(notas)}")
 
                 # INTERVALOS
                 st.info(f"**Int_IVAN:** {row.get('Int_IVAN', '')}")
                 
-                # Int_TRAD ahora que la columna está corregida en el Excel
                 if 'Int_TRAD' in row and pd.notna(row['Int_TRAD']):
-                    st.info(f"**Int_TRAD:** {row['Int_TRAD']}") #
+                    st.info(f"**Int_TRAD:** {row['Int_TRAD']}")
                 
                 st.write("---")
                 st.subheader("Posiciones")
@@ -81,18 +85,4 @@ if df is not None:
                 imgs = []
                 for i in range(1, 10):
                     col = f'Diagrama{i}'
-                    if col in row and pd.notna(row[col]) and str(row[col]) not in ["0", "nan", ""]:
-                        file = str(row[col]).split('/')[-1]
-                        imgs.append(f"https://raw.githubusercontent.com/{USUARIO_GITHUB}/{REPO_GITHUB}/main/{row['Naturaleza']}/{file}")
-
-                if imgs:
-                    cols = st.columns(len(imgs))
-                    for idx, url in enumerate(imgs):
-                        with cols[idx]:
-                            st.image(url, width=110) #
-                            st.caption(f"P{idx+1}")
-    else:
-        st.info("Configura tu acorde en el menú de la izquierda y presiona 'Mostrar acordes'.")
-
-else:
-    st.error("No se pudo cargar la base de datos.")
+                    if col in row and pd.notna(row[col]) and str(row[col
