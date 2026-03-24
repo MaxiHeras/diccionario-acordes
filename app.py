@@ -8,17 +8,15 @@ if 'sb_state' not in st.session_state:
 st.set_page_config(page_title="Acordes", layout="wide", initial_sidebar_state=st.session_state.sb_state)
 
 # CSS para Modo Oscuro y Galería Horizontal
-# Se agregó "object-fit: contain" para que las imágenes no se deformen
 st.markdown("""
 <style>
 @media (prefers-color-scheme: dark) { .chord-img { filter: invert(1) hue-rotate(180deg); } }
 .scroll-container { display: flex; overflow-x: auto; gap: 15px; padding: 10px 0; -webkit-overflow-scrolling: touch; }
 .chord-item { flex: 0 0 auto; text-align: center; }
-.chord-img { object-fit: contain; border-radius: 4px; }
 </style>
 """, unsafe_allow_html=True)
 
-# 2. CARGA DE DATOS
+# 2. CARGA DE DATOS (URLs completas en una sola línea para evitar errores de sintaxis)
 URL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
 QR = "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=https://diccionario-acordes-okhwulgyz9ueachvkdfh26.streamlit.app/"
 
@@ -27,7 +25,7 @@ def load_data():
     try:
         df = pd.read_csv(URL)
         df.columns = [str(c).strip() for c in df.columns]
-        # Limpieza profunda de celdas basura en el Excel
+        # Limpieza de celdas vacías en diagramas
         for i in range(1, 10):
             col = f'Diagrama{i}'
             if col in df.columns:
@@ -51,7 +49,6 @@ if df is not None:
         st.write("---")
         st.image(QR, caption="Compartir App", width=210)
         
-        # Botón limpio (sin tilde)
         if st.button("Mostrar acordes", use_container_width=True, type="primary"):
             if nat_sel:
                 st.session_state.sb_state = "collapsed"
@@ -63,47 +60,33 @@ if df is not None:
         st.session_state.sb_state = "collapsed"
         df_f = df_r[df_r['Naturaleza'].isin(nat_sel)]
         
-        # Pestañas contraídas si hay más de un tipo seleccionado para evitar scroll infinito
+        # Pestañas contraídas si hay más de 1 acorde seleccionado
         abierto = len(nat_sel) == 1
         
         for _, row in df_f.iterrows():
             with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=abierto):
-                # Notas (Filtrando celdas vacías o con ceros)
-                ns = [str(row[c]).strip() for c in ['N1','N2','N3','N4'] if c in row and pd.notna(row[c]) and str(row[c]).lower() not in ['nan', '', '0']]
+                # Notas
+                ns = [str(row[c]).strip() for c in ['N1','N2','N3','N4'] if c in row and pd.notna(row[c]) and str(row[c]).lower() not in ['nan','']]
                 st.write(f"**Notas:** {' - '.join(ns)}")
                 
-                # Info Técnica
-                if pd.notna(row.get('Int_IVAN')) and str(row.get('Int_IVAN')) != '0': 
-                    st.info(f"**Int_IVAN:** {row['Int_IVAN']}")
-                if pd.notna(row.get('Int_TRAD')) and str(row.get('Int_TRAD')) != '0': 
-                    st.info(f"**Int_TRAD:** {row['Int_TRAD']}")
+                # Info
+                if pd.notna(row.get('Int_IVAN')): st.info(f"**Int_IVAN:** {row['Int_IVAN']}")
+                if pd.notna(row.get('Int_TRAD')): st.info(f"**Int_TRAD:** {row['Int_TRAD']}")
                 
                 st.write("---")
                 st.subheader("Posiciones")
 
-                # Galería Blindada: Solo muestra si el nombre en Excel termina en extensión de imagen
+                # Galería Horizontal (Sin iconos rotos)
                 h_items = ""
                 for i in range(1, 10):
-                    val = str(row.get(f'Diagrama{i}', '0')).lower()
-                    if any(ext in val for ext in ['.png', '.jpg', '.jpeg']):
-                        # Extraer solo el nombre del archivo si hay una ruta
+                    val = str(row.get(f'Diagrama{i}', '0'))
+                    if val != '0':
                         f = val.split('/')[-1]
                         url_img = f"https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main/{row['Naturaleza']}/{f}"
-                        
-                        # El 'onerror' hace que si la imagen no existe en GitHub, no quede el hueco ni el "P(i)"
-                        h_items += f'''
-                        <div class="chord-item" id="p{i}_{row.name}">
-                            <img src="{url_img}" class="chord-img" width="115" 
-                                 onerror="document.getElementById('p{i}_{row.name}').style.display='none';">
-                            <p style="font-size:12px;color:gray;">P{i}</p>
-                        </div>
-                        '''
+                        h_items += f'<div class="chord-item"><img src="{url_img}" class="chord-img" width="115" onerror="this.parentElement.style.display=\'none\';"><p style="font-size:12px;color:gray;">P{i}</p></div>'
                 
                 if h_items:
                     st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
-                else: 
-                    st.warning("No hay diagramas disponibles para este tipo.")
-    else: 
-        st.info("Configurá tu acorde en el menú lateral.")
-else: 
-    st.error("Error al conectar con el Excel. Verifica el enlace de Google Sheets.")
+                else: st.warning("No hay diagramas")
+    else: st.info("Configurá tu acorde en el menú.")
+else: st.error("Error al conectar con el Excel.")
