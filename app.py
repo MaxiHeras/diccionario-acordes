@@ -1,87 +1,92 @@
 import streamlit as st
 import pandas as pd
 
-# 1. CONFIGURACIÓN Y ESTILO
+# 1. CONFIGURACIÓN DE PÁGINA
 if 'sb_state' not in st.session_state:
     st.session_state.sb_state = "expanded"
 
-st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state=st.session_state.sb_state)
+st.set_page_config(page_title="Acordes", layout="wide", initial_sidebar_state=st.session_state.sb_state)
 
+# CSS para Modo Oscuro y Galería Horizontal
 st.markdown("""
-    <style>
-    @media (prefers-color-scheme: dark) { .chord-img { filter: invert(1) hue-rotate(180deg); } }
-    .scroll-container { display: flex; overflow-x: auto; gap: 15px; padding: 10px 0; -webkit-overflow-scrolling: touch; }
-    .chord-item { flex: 0 0 auto; text-align: center; }
-    </style>
+<style>
+@media (prefers-color-scheme: dark) { .chord-img { filter: invert(1) hue-rotate(180deg); } }
+.scroll-container { display: flex; overflow-x: auto; gap: 15px; padding: 10px 0; -webkit-overflow-scrolling: touch; }
+.chord-item { flex: 0 0 auto; text-align: center; }
+</style>
 """, unsafe_allow_html=True)
 
-# 2. CARGA DE DATOS (URLs en una sola línea)
+# 2. CARGA DE DATOS (URLs completas en una sola línea para evitar errores de sintaxis)
 URL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
 QR = "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=https://diccionario-acordes-okhwulgyz9ueachvkdfh26.streamlit.app/"
 
 @st.cache_data
-def load():
+def load_data():
     try:
         df = pd.read_csv(URL)
         df.columns = [str(c).strip() for c in df.columns]
+        # Limpieza de celdas vacías en diagramas
+        for i in range(1, 10):
+            col = f'Diagrama{i}'
+            if col in df.columns:
+                df[col] = df[col].astype(str).str.strip().replace({'nan': '0', 'None': '0', '': '0'})
         return df
     except: return None
 
-df = load()
+df = load_data()
 
 if df is not None:
     # 3. BARRA LATERAL
     with st.sidebar:
         st.header("🔍 Buscar Acorde")
-        notas_orden = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B']
-        r_list = [n for n in notas_orden if n in df['Raiz'].unique()]
+        orden_m = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B']
+        r_list = [n for n in orden_m if n in df['Raiz'].unique()]
+        
         raiz_sel = st.selectbox("Nota Raíz:", r_list)
-        df_raiz = df[df['Raiz'] == raiz_sel]
-        nat_sel = st.multiselect("Tipo:", options=df_raiz['Naturaleza'].unique())
+        df_r = df[df['Raiz'] == raiz_sel]
+        nat_sel = st.multiselect("Tipo:", options=df_r['Naturaleza'].unique())
         
         st.write("---")
-        st.image(QR, caption="Compartir App", width=180)
+        st.image(QR, caption="Compartir App", width=210)
         
         if st.button("Mostrar acordes", use_container_width=True, type="primary"):
             if nat_sel:
                 st.session_state.sb_state = "collapsed"
                 st.rerun()
+            else: st.warning("Elegí un acorde")
 
     # 4. RESULTADOS
     if nat_sel:
         st.session_state.sb_state = "collapsed"
-        df_f = df_raiz[df_raiz['Naturaleza'].isin(nat_sel)]
+        df_f = df_r[df_r['Naturaleza'].isin(nat_sel)]
         
-        for idx, row in df_f.iterrows():
-            with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=True):
+        # Pestañas contraídas si hay más de 1 acorde seleccionado
+        abierto = len(nat_sel) == 1
+        
+        for _, row in df_f.iterrows():
+            with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=abierto):
                 # Notas
-                notas = [str(row[c]).strip() for c in ['N1','N2','N3','N4'] if pd.notna(row.get(c)) and str(row[c]).lower() not in ['nan','','0']]
-                st.write(f"**Notas:** {' - '.join(notas)}")
+                ns = [str(row[c]).strip() for c in ['N1','N2','N3','N4'] if c in row and pd.notna(row[c]) and str(row[c]).lower() not in ['nan','']]
+                st.write(f"**Notas:** {' - '.join(ns)}")
+                
+                # Info
+                if pd.notna(row.get('Int_IVAN')): st.info(f"**Int_IVAN:** {row['Int_IVAN']}")
+                if pd.notna(row.get('Int_TRAD')): st.info(f"**Int_TRAD:** {row['Int_TRAD']}")
+                
                 st.write("---")
-                
-                # GALERÍA HORIZONTAL
+                st.subheader("Posiciones")
+
+                # Galería Horizontal (Sin iconos rotos)
                 h_items = ""
-                GITHUB_BASE = "https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main"
-                
                 for i in range(1, 10):
-                    val = str(row.get(f'Diagrama{i}', 'nan')).strip()
-                    
-                    # FILTRO: Solo si la celda tiene texto que termina en .png
-                    if val.lower().endswith('.png'):
-                        # Esto limpia cualquier ruta extra y se queda solo con el nombre del archivo
-                        nombre_archivo = val.split('/')[-1]
-                        # Construimos la ruta usando la carpeta de la Naturaleza (ej: Mayores)
-                        url_img = f"{GITHUB_BASE}/{row['Naturaleza']}/{nombre_archivo}"
-                        
-                        div_id = f"pos_{idx}_{i}"
-                        h_items += f'<div class="chord-item" id="{div_id}"><img src="{url_img}" class="chord-img" width="110" onerror="document.getElementById(\'{div_id}\').style.display=\'none\';"><p style="font-size:12px;color:gray;">P{i}</p></div>'
+                    val = str(row.get(f'Diagrama{i}', '0'))
+                    if val != '0':
+                        f = val.split('/')[-1]
+                        url_img = f"https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main/{row['Naturaleza']}/{f}"
+                        h_items += f'<div class="chord-item"><img src="{url_img}" class="chord-img" width="115" onerror="this.parentElement.style.display=\'none\';"><p style="font-size:12px;color:gray;">P{i}</p></div>'
                 
                 if h_items:
-                    # El uso de unsafe_allow_html=True aquí es clave para que se vean los dibujos
                     st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
-                else:
-                    st.warning("No se encontraron imágenes en GitHub.")
-    else:
-        st.info("Elegí un acorde en el menú lateral.")
-else:
-    st.error("Error al cargar el Excel.")
+                else: st.warning("No hay diagramas")
+    else: st.info("Configurá tu acorde en el menú.")
+else: st.error("Error al conectar con el Excel.")
