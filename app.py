@@ -6,14 +6,14 @@ if 'sb_state' not in st.session_state:
     st.session_state.sb_state = "expanded"
 
 st.set_page_config(
-    page_title="Acordes", 
+    page_title="Diccionario de Acordes", 
     layout="wide", 
     initial_sidebar_state=st.session_state.sb_state
 )
 
-# --- DATOS Y QR ---
+# --- DATOS Y QR (QR más grande) ---
 URL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
-QR = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://diccionario-acordes-okhwulgyz9ueachvkdfh26.streamlit.app/"
+QR_URL = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://diccionario-acordes-okhwulgyz9ueachvkdfh26.streamlit.app/"
 
 @st.cache_data
 def load():
@@ -33,9 +33,11 @@ if df is not None:
         df_r = df[df['Raiz'] == r_sel]
         n_sel = st.multiselect("Tipo:", options=df_r['Naturaleza'].unique())
         
-        st.image(QR, caption="Compartir App", width=120)
+        # QR MÁS GRANDE
+        st.write("---")
+        st.image(QR_URL, caption="Compartir App", width=180)
         
-        for _ in range(10): st.write("") 
+        for _ in range(6): st.write("") # Espaciador
         
         if st.button("Mostrar acordes", use_container_width=True, type="primary"):
             if n_sel:
@@ -45,7 +47,7 @@ if df is not None:
 
     # 3. RESULTADOS
     if n_sel:
-        # Forzar que la sidebar se abra si el usuario usa el botón nativo de Streamlit
+        # Forzar estado colapsado al mostrar resultados
         st.session_state.sb_state = "collapsed"
 
         for _, row in df_r[df_r['Naturaleza'].isin(n_sel)].iterrows():
@@ -63,7 +65,7 @@ if df is not None:
                 st.write("---")
                 st.subheader("Posiciones")
 
-                # --- TRUCO PARA FILA HORIZONTAL EN CELULAR ---
+                # --- GALERÍA HORIZONTAL SEGURA ---
                 imgs = []
                 for i in range(1, 10):
                     c = f'Diagrama{i}'
@@ -73,20 +75,20 @@ if df is not None:
                         imgs.append(url)
 
                 if imgs:
-                    # Generamos el HTML para que las imágenes no se apilen
-                    html_fotos = '<div style="display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 10px;">'
+                    # Usamos f-strings limpias para evitar que Streamlit rompa el HTML
+                    html_galeria = '<div style="display: flex; overflow-x: auto; gap: 15px; padding-bottom: 10px;">'
                     for idx, url in enumerate(imgs):
-                        html_fotos += f'''
-                            <div style="flex: 0 0 auto; text-align: center;">
-                                <img src="{url}" width="100px"><br>
-                                <span style="font-size: 12px; color: gray;">P{idx+1}</span>
-                            </div>
+                        html_galeria += f'''
+                        <div style="flex: 0 0 auto; text-align: center;">
+                            <img src="{url}" style="width: 110px; height: auto; border-radius: 5px;">
+                            <p style="margin-top: 5px; font-size: 14px; color: #555;">P{idx+1}</p>
+                        </div>
                         '''
-                    html_fotos += '</div>'
-                    st.markdown(html_fotos, unsafe_allow_html=True)
+                    html_galeria += '</div>'
+                    st.markdown(html_galeria, unsafe_allow_html=True)
                 else:
-                    st.warning("Sin diagramas.")
+                    st.warning("Sin diagramas disponibles.")
     else:
-        st.info("Configurá tu acorde en el menú lateral.")
+        st.info("Configurá tu acorde en el menú lateral y dale a 'Mostrar acordes'.")
 else:
-    st.error("Error de conexión.")
+    st.error("Error de conexión con la base de datos.")
