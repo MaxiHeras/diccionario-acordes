@@ -1,58 +1,93 @@
 import streamlit as st
 import pandas as pd
 
-# CONFIGURACIÓN DE LA PÁGINA
-st.set_page_config(page_title="Diccionario de Acordes", page_icon="🎸", layout="wide")
+# 1. CONFIGURACIÓN DE LA PÁGINA
+st.set_page_config(
+    page_title="Diccionario de Acordes",
+    page_icon="🎸",
+    layout="wide"
+)
 
-# 1. CONEXIÓN CON TU GOOGLE SHEET
+# --- CONFIGURACIÓN DE RUTAS (EDITA ESTO) ---
+USUARIO_GITHUB = "MaxiHeras"  # <--- CAMBIA ESTO
+REPO_GITHUB = "diccionario-acordes"      # <--- CAMBIA ESTO SI ES OTRO
+# -------------------------------------------
+
+# 2. CONEXIÓN CON GOOGLE SHEET
 SHEET_ID = "1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno"
-URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv"
+URL_SHEET = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv"
 
 @st.cache_data
 def cargar_datos():
-    # Cargamos el CSV y nos aseguramos de que los nombres de columnas coincidan
-    return pd.read_csv(URL)
+    # Cargamos los datos desde Google Sheets
+    df = pd.read_csv(URL_SHEET)
+    return df
 
 try:
     df = cargar_datos()
 
-    # INTERFAZ DE USUARIO
-    st.title("🎸 Diccionario de Acordes para Estudiantes")
-    st.markdown("---")
+    # TÍTULO PRINCIPAL
+    st.title("🎸 Diccionario de Acordes")
+    st.markdown("Herramienta interactiva para estudiantes de música.")
+    st.divider()
 
-    # BARRA LATERAL PARA FILTROS
-    st.sidebar.header("Filtros de búsqueda")
+    # 3. FILTROS EN LA BARRA LATERAL
+    st.sidebar.header("🔍 Buscar Acorde")
     
-    # Filtro 1: Nota Raíz (C, D, E, F, G, A, B)
+    # Filtro de Nota Raíz
     lista_raices = sorted(df['Raiz'].unique())
     raiz_sel = st.sidebar.selectbox("Selecciona la Nota Raíz:", lista_raices)
+    
+    # Filtro de Naturaleza (Tipo de Acorde)
+    # Filtramos las opciones disponibles solo para esa raíz
+    df_raiz = df[df['Raiz'] == raiz_sel]
+    lista_naturalezas = sorted(df_raiz['Naturaleza'].unique())
+    
+    nat_sel = st.sidebar.multiselect(
+        "Tipo de Acorde:", 
+        options=lista_naturalezas, 
+        default=lista_naturalezas
+    )
 
-    # Filtro 2: Naturaleza (Mayor, Menor, Dominante, etc.)
-    lista_naturaleza = sorted(df['Naturaleza'].unique())
-    nat_sel = st.sidebar.multiselect("Tipo de Acorde:", lista_naturaleza, default=lista_naturaleza[0])
+    # 4. FILTRADO FINAL DE DATOS
+    df_filtrado = df_raiz[df_raiz['Naturaleza'].isin(nat_sel)]
 
-    # FILTRADO DE DATOS
-    df_filtrado = df[(df['Raiz'] == raiz_sel) & (df['Naturaleza'].isin(nat_sel))]
-
-    # MOSTRAR RESULTADOS
+    # 5. MOSTRAR RESULTADOS
     if not df_filtrado.empty:
-        for index, row in df_filtrado.iterrows():
-            with st.expander(f"📖 Acorde: {row['Raiz']} - {row['Naturaleza']}", expanded=True):
-                col1, col2 = st.columns(2)
+        # Usamos columnas para que no se vea todo hacia abajo
+        for _, row in df_filtrado.iterrows():
+            with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=True):
+                col_info, col_img = st.columns([1, 1])
                 
-                with col1:
+                with col_info:
+                    st.subheader("Información Técnica")
                     st.write(f"**Estado:** {row['Estado']}")
                     st.write(f"**Notas:** {row['N1']}, {row['N2']}, {row['N3']}, {row['N4'] if pd.notna(row['N4']) else ''}")
-                    st.write(f"**Intervalos:** {row['Intervalos']}")
+                    st.info(f"**Intervalos:** {row['Int_IVAN']}")
                 
-                with col2:
-                    st.info(f"**Estructura (Intervalos):** {row['Int_IVAN']}")
-                
-                # Aquí podrías mostrar los diagramas si estuvieran en una URL pública
-                # st.image(f"URL_DE_TU_SERVIDOR/{row['Diagrama1']}") 
-
+                with col_img:
+                    # LÓGICA PARA CARGAR LA IMAGEN DESDE GITHUB
+                    if pd.notna(row['Diagrama1']):
+                        # Limpiamos el nombre: extraemos solo el archivo (ej: C-MAY-1.png)
+                        nombre_archivo = str(row['Diagrama1']).split('/')[-1]
+                        
+                        # La carpeta es la 'Naturaleza' (ej: MAYORES)
+                        carpeta = str(row['Naturaleza']).strip()
+                        
+                        # Construimos la URL de GitHub Raw
+                        url_final_img = f"https://raw.githubusercontent.com/{USUARIO_GITHUB}/{REPO_GITHUB}/main/{carpeta}/{nombre_archivo}"
+                        
+                        # Mostramos la imagen
+                        st.image(url_final_img, caption=f"Diagrama: {row['Raiz']} {row['Naturaleza']}", use_container_width=True)
+                    else:
+                        st.warning("No hay diagrama disponible para este acorde.")
     else:
-        st.warning("No se encontraron acordes con esos filtros.")
+        st.info("Selecciona al menos un tipo de acorde en el menú lateral para ver los resultados.")
 
 except Exception as e:
-    st.error(f"Error al conectar con la base de datos: {e}")
+    st.error("No se pudo cargar la base de datos.")
+    st.write(f"Detalle del error: {e}")
+
+# PIE DE PÁGINA
+st.divider()
+st.caption("Actualizado automáticamente desde Google Sheets.")
