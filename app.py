@@ -34,24 +34,27 @@ if df is not None:
     # 3. BARRA LATERAL
     st.sidebar.header("🔍 Buscar Acorde")
     
-    # Filtro Nota Raíz
-    lista_raices = sorted(df['Raiz'].unique())
-    raiz_sel = st.sidebar.selectbox("Selecciona la Nota Raíz:", lista_raices)
+    # --- CAMBIO 1: ORDEN MUSICAL (C, D, E, F, G, A, B) ---
+    orden_notas_musical = ["C", "C#", "Db", "D", "D#", "Eb", "E", "F", "F#", "Gb", "G", "G#", "Ab", "A", "A#", "Bb", "B"]
+    raices_presentes = df['Raiz'].unique()
+    # Filtramos y ordenamos según nuestra lista musical
+    lista_raices = [n for n in orden_notas_musical if n in raices_presentes]
+    # Si hay alguna nota extraña en el Excel, la agregamos al final
+    extras_notas = sorted([n for n in raices_presentes if n not in orden_notas_musical])
+    lista_raices_final = lista_raices + extras_notas
+
+    raiz_sel = st.sidebar.selectbox("Selecciona la Nota Raíz:", lista_raices_final)
     
     # Filtrar naturalezas disponibles para esa nota
     df_raiz = df[df['Raiz'] == raiz_sel]
     
-    # ORDEN PERSONALIZADO SOLICITADO
+    # ORDEN DE NATURALEZA
     orden_deseado = ["MAYOR", "MENOR", "DOMINANTE", "AUMENTADO", "DISMINUIDO", "SEMIDISMINUIDO", "MAJ7", "MENOR7"]
-    
-    # Obtenemos las naturalezas reales del CSV y las ordenamos según tu lista
     opciones_reales = df_raiz['Naturaleza'].unique()
     lista_ordenada = [n for n in orden_deseado if n in opciones_reales]
-    # Si hay alguna que no esté en tu lista, la agregamos al final
     extras = [n for n in opciones_reales if n not in orden_deseado]
     lista_final_opciones = lista_ordenada + sorted(extras)
 
-    # FILTRO SIN SELECCIÓN PREVIA (default=[])
     nat_sel = st.sidebar.multiselect(
         "Tipo de Acorde:", 
         options=lista_final_opciones, 
@@ -70,27 +73,39 @@ if df is not None:
         
         for _, row in df_filtrado.iterrows():
             with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=True):
-                st.write(f"**Notas:** {row['N1']}, {row['N2']}, {row['N3']}, {row['N4'] if pd.notna(row['N4']) and str(row['N4']) != 'nan' else ''}")
+                # Notas
+                notas_str = f"{row['N1']}, {row['N2']}, {row['N3']}"
+                if pd.notna(row['N4']) and str(row['N4']).lower() != 'nan':
+                    notas_str += f", {row['N4']}"
+                st.write(f"**Notas:** {notas_str}")
+
+                # --- CAMBIO 2: INTERVALOS IVAN Y TRADICIONALES ---
                 st.info(f"**Intervalos:** {row['Int_IVAN']}")
+                
+                # Mostramos Int_TRAD si existe en el Excel
+                if 'Int_TRAD' in row and pd.notna(row['Int_TRAD']):
+                     st.info(f"**Intervalos Tradicionales:** {row['Int_TRAD']}")
                 
                 st.write("---")
                 st.subheader("Posiciones")
                 
-                # Recolectar imágenes existentes
+                # --- CAMBIO 3: LIMPIEZA TOTAL DE IMÁGENES VACÍAS ---
                 lista_imagenes = []
                 for i in range(1, 10):
                     col = f'Diagrama{i}'
-                    if col in row and pd.notna(row[col]) and str(row[col]).strip() != "" and str(row[col]) != 'nan':
-                        archivo = str(row[col]).split('/')[-1].strip()
-                        url_img = f"https://raw.githubusercontent.com/{USUARIO_GITHUB}/{REPO_GITHUB}/main/{row['Naturaleza']}/{archivo}"
-                        lista_imagenes.append(url_img)
+                    # Verificamos si la columna existe y si tiene contenido real
+                    if col in row and pd.notna(row[col]):
+                        val = str(row[col]).strip()
+                        if val != "" and val.lower() != 'nan' and val != '0':
+                            archivo = val.split('/')[-1]
+                            url_img = f"https://raw.githubusercontent.com/{USUARIO_GITHUB}/{REPO_GITHUB}/main/{row['Naturaleza']}/{archivo}"
+                            lista_imagenes.append(url_img)
 
                 if lista_imagenes:
-                    # Usamos columnas para que se acomoden bien en el celular
+                    # Solo creamos la cantidad exacta de columnas necesarias
                     cols = st.columns(len(lista_imagenes))
                     for idx, url in enumerate(lista_imagenes):
                         with cols[idx]:
-                            # Tamaño más chico (150px) para comodidad en móvil
                             st.image(url, width=150)
                             st.caption(f"Pos. {idx+1}")
                 else:
