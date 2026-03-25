@@ -3,11 +3,12 @@ import pandas as pd
 import requests
 from fpdf import FPDF
 from io import BytesIO
+import qrcode
 
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
-# CSS AGRESIVO PARA FORZAR GRILLA EN CELULAR
+# CSS - MANTIENE LA GRILLA DE 3 EN CELULAR Y ESTILOS DE COMPARTIR
 st.markdown("""
     <style>
     @media (prefers-color-scheme: dark) { .chord-img-web { filter: invert(1) hue-rotate(180deg); } }
@@ -15,30 +16,18 @@ st.markdown("""
     .chord-img-web { width: 150px; height: auto; display: block; margin: 0 auto; }
     
     /* FUERZA 3 COLUMNAS EN MÓVIL */
-    [data-testid="stHorizontalBlock"] {
-        display: flex !important;
-        flex-direction: row !important;
-        flex-wrap: nowrap !important;
-        gap: 5px !important;
-    }
-    [data-testid="column"] {
-        width: 33% !important;
-        flex: 1 1 33% !important;
-        min-width: 33% !important;
-    }
+    [data-testid="stHorizontalBlock"] { display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; gap: 5px !important; }
+    [data-testid="column"] { width: 33% !important; flex: 1 1 33% !important; min-width: 33% !important; }
 
-    /* Ajuste de botones para que no se deformen */
-    .stButton > button {
-        width: 100% !important;
-        padding: 5px 2px !important;
-        font-size: 13px !important;
-        min-height: 40px !important;
-        border-radius: 8px !important;
-    }
+    .stButton > button { width: 100% !important; padding: 5px 2px !important; font-size: 13px !important; min-height: 40px !important; border-radius: 8px !important; }
+    
+    /* Estilo para el link de la App */
+    .app-link { background-color: #f0f2f6; padding: 10px; border-radius: 10px; border: 1px dashed #ff4b4b; text-align: center; font-size: 14px; }
     </style>
 """, unsafe_allow_html=True)
 
-# 2. CARGA DE DATOS
+# 2. CARGA DE DATOS Y CONSTANTES
+APP_URL = "https://diccionario-acordes-xz99pzx875gw2ytzpqacv.streamlit.app/"
 URL_EXCEL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
 GITHUB_BASE = "https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main"
 
@@ -59,7 +48,7 @@ def toggle_nota(nota):
     if nota in st.session_state.notas_inversas: st.session_state.notas_inversas.remove(nota)
     else: st.session_state.notas_inversas.add(nota)
 
-# (Clase PDF y Función generar_pdf se mantienen igual que antes)
+# 3. CLASE PDF
 class PDF_Final(FPDF):
     def footer(self):
         self.set_y(-15)
@@ -113,6 +102,7 @@ if df is not None:
             df_raiz = df[df['Raiz'] == raiz_sel]
             opciones = [t for t in orden_tipos if t in df_raiz['Naturaleza'].unique()]
             
+            # SELECCIÓN AUTOMÁTICA TOTAL AL CAMBIAR RAÍZ
             if "ultima_raiz_control" not in st.session_state or st.session_state.ultima_raiz_control != raiz_sel:
                 st.session_state.ultima_raiz_control = raiz_sel
                 st.session_state.seleccionados = opciones
@@ -121,10 +111,19 @@ if df is not None:
             c1, c2 = st.columns(2)
             c1.button("Todo", on_click=seleccionar_todo, args=(opciones,), use_container_width=True)
             c2.button("Limpiar", on_click=limpiar_todo, use_container_width=True)
+            
+            # --- SECCIÓN DE COMPARTIR ---
+            st.write("---")
+            st.write("📲 **Compartir App**")
+            st.markdown(f'<div class="app-link"><code>{APP_URL}</code></div>', unsafe_allow_html=True)
+            
+            qr = qrcode.make(APP_URL)
+            buf = BytesIO()
+            qr.save(buf, format="PNG")
+            st.image(buf, caption="Escaneame para abrir", use_container_width=True)
         
         else:
             st.header("🔍 Identificador")
-            # Forzamos 3 columnas fijas en cada fila
             for i in range(0, len(notas_musicales), 3):
                 cols = st.columns(3)
                 for j in range(3):
@@ -163,11 +162,13 @@ if df is not None:
                                 h_items += f'<div style="flex:0 0 auto; text-align:center;"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
                         st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
             
-            if st.button("📥 Descargar PDF"):
+            # --- GENERAR PDF ABAJO DE LOS RESULTADOS ---
+            st.write("---")
+            if st.button("📥 Generar PDF de selección"):
                 pdf_bytes = generar_pdf(df_raiz[df_raiz['Naturaleza'].isin(st.session_state.seleccionados)])
-                st.download_button("Guardar archivo", data=bytes(pdf_bytes), file_name=f"Acordes_{raiz_sel}.pdf")
+                st.download_button("Descargar PDF ahora", data=bytes(pdf_bytes), file_name=f"Diccionario_{raiz_sel}.pdf")
 
-    else: # IDENTIFICADOR
+    else: # MODO IDENTIFICADOR
         seleccion = st.session_state.notas_inversas
         if seleccion:
             st.write(f"**Notas:** {' - '.join(sorted(list(seleccion)))}")
