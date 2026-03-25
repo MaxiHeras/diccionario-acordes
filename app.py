@@ -14,14 +14,17 @@ st.markdown("""
     .scroll-container { display: flex; overflow-x: auto; gap: 15px; padding: 10px 0; -webkit-overflow-scrolling: touch; }
     .chord-item { flex: 0 0 auto; text-align: center; }
     .notas-web { font-size: 20px; font-weight: bold; color: #31333F; margin-bottom: 10px; }
-    /* Ajuste para reducir la altura de los recuadros st.info y st.success */
-    div[data-testid="stNotification"] { padding: 0.5rem 1rem; min-height: auto; }
+    
+    /* AJUSTE DE ALTURA PARA RECUADROS DE INTERVALOS */
+    div[data-testid="stNotificationContent"] { padding: 0px 10px !markdown; }
+    div[data-testid="stNotification"] { padding: 5px 10px; min-height: 0px; }
     </style>
 """, unsafe_allow_html=True)
 
 # 2. CARGA DE DATOS
 APP_URL = "https://diccionario-acordes-gpblssuywitmaglkwvdqde.streamlit.app/"
 URL_EXCEL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
+URL_QR = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={APP_URL}"
 GITHUB_BASE = "https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main"
 
 @st.cache_data
@@ -32,31 +35,21 @@ def load():
         return df
     except: return None
 
-# --- FUNCIÓN PDF CON MARCA DE AGUA ---
+# --- FUNCIÓN PDF CON MARCA DE AGUA EN EL PIE ---
 def generar_pdf(dataframe_seleccionado):
     pdf = FPDF(orientation='P', unit='mm', format='A4')
-    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.set_auto_page_break(auto=True, margin=20) # Margen inferior para el pie
     
     for _, row in dataframe_seleccionado.iterrows():
         pdf.add_page()
         
-        # MARCA DE AGUA (Nombre: Maxi Heras)
-        pdf.set_font("Helvetica", "B", 40)
-        pdf.set_text_color(240, 240, 240) # Gris muy claro
-        # Rotación y posición central de la marca de agua
-        with pdf.rotation(45, x=105, y=148):
-            pdf.text(60, 148, "MAXI HERAS")
-        
-        # Restablecer color para el contenido
-        pdf.set_text_color(0, 0, 0)
-        
-        # TÍTULO
+        # TÍTULO (24pt)
         pdf.set_font("Helvetica", "B", 24)
+        pdf.set_text_color(0, 0, 0) 
         pdf.cell(0, 20, f"{row['Raiz']} {row['Naturaleza']}", border=1, ln=True, align='C')
-        
         pdf.ln(8) 
         
-        # CONTENIDO INFORMATIVO
+        # CONTENIDO (Notas: 11pt, Marca de agua: 13pt)
         pdf.set_text_color(60, 60, 60)
         alt_linea = 5
         
@@ -68,23 +61,23 @@ def generar_pdf(dataframe_seleccionado):
         pdf.write(alt_linea, f"{' - '.join(notas_list)}\n")
         pdf.ln(2)
 
-        # Intervalos IVAN
+        # Intervalos
         pdf.set_font("Helvetica", "B", 11)
         pdf.write(alt_linea, "Intervalos IVAN: ")
         pdf.set_font("Helvetica", "", 11)
         pdf.write(alt_linea, f"{str(row.get('Int_IVAN', 'N/A'))}\n")
         pdf.ln(2)
 
-        # Intervalos TRAD
         pdf.set_font("Helvetica", "B", 11)
         pdf.write(alt_linea, "Intervalos TRAD: ")
         pdf.set_font("Helvetica", "", 11)
         pdf.write(alt_linea, f"{str(row.get('Int_TRAD', 'N/A'))}\n")
         
+        # ESPACIO SIMÉTRICO
         GAP_SIMETRICO = 12 
         pdf.ln(GAP_SIMETRICO) 
 
-        # CUADRÍCULA DE DIAGRAMAS
+        # CUADRÍCULA
         X_START, GAP_X, COLS = 15, 5, 4
         DIAG_WIDTH, DIAG_HEIGHT, TEXT_Px_HEIGHT = 38, 45, 5
         y_inicial_bloque = pdf.get_y()
@@ -97,12 +90,11 @@ def generar_pdf(dataframe_seleccionado):
                 try:
                     img_data = requests.get(url_img, timeout=5).content
                     img_buffer = BytesIO(img_data)
-                    col = count % COLS
-                    fila = count // COLS
+                    col, fila = count % COLS, count // COLS
                     if col == 0 and fila > 0:
                         y_inicial_bloque += (DIAG_HEIGHT + TEXT_Px_HEIGHT + GAP_SIMETRICO)
                     pos_x = X_START + (col * (DIAG_WIDTH + GAP_X))
-                    if y_inicial_bloque + DIAG_HEIGHT + 10 > 282: 
+                    if y_inicial_bloque + DIAG_HEIGHT + 15 > 275: # Espacio para la marca de agua
                         pdf.add_page()
                         y_inicial_bloque = 20
                         pos_x = X_START + (col * (DIAG_WIDTH + GAP_X))
@@ -113,6 +105,13 @@ def generar_pdf(dataframe_seleccionado):
                     pdf.cell(DIAG_WIDTH, TEXT_Px_HEIGHT, f"P{i}", border=0, ln=False, align='C')
                     count += 1
                 except: continue
+        
+        # MARCA DE AGUA EN EL PIE (11pt + 2pt = 13pt)
+        pdf.set_y(-15) # 15mm desde el final
+        pdf.set_font("Helvetica", "B", 13)
+        pdf.set_text_color(200, 200, 200) # Gris suave para no distraer
+        pdf.cell(0, 10, "Maxi Heras - Tucumán", ln=False, align='C')
+        
     return pdf.output()
 
 df = load()
@@ -127,7 +126,6 @@ if df is not None:
         
         if "raiz_anterior" not in st.session_state: st.session_state.raiz_anterior = r_list[0]
         raiz_sel = st.selectbox("Nota Raíz:", r_list)
-        
         df_raiz = df[df['Raiz'] == raiz_sel]
         tipos_reales = df_raiz['Naturaleza'].unique()
         opciones_finales = [t for t in orden_deseado if t in tipos_reales] + sorted([t for t in tipos_reales if t not in orden_deseado])
@@ -141,7 +139,6 @@ if df is not None:
 
         if 'ms_key' not in st.session_state: st.session_state.ms_key = 0
         if 'seleccionados' not in st.session_state: st.session_state.seleccionados = opciones_finales
-
         nat_sel = st.multiselect("Tipo:", options=opciones_finales, default=st.session_state.seleccionados, key=f"ms_{st.session_state.ms_key}")
 
         col1, col2 = st.columns(2)
@@ -157,11 +154,15 @@ if df is not None:
         st.write("---")
         if nat_sel:
             if st.button("📥 Generar PDF", use_container_width=True):
-                with st.spinner("Generando PDF..."):
+                with st.spinner("Preparando PDF..."):
                     pdf_bytes = generar_pdf(df_raiz[df_raiz['Naturaleza'].isin(nat_sel)])
                     st.download_button(label="🔥 Descargar PDF", data=bytes(pdf_bytes), file_name=f"Acordes_{raiz_sel}.pdf", mime="application/pdf", use_container_width=True)
 
-    # 4. RESULTADOS (WEB)
+        # RESTAURACIÓN DE QR Y URL
+        st.write("---")
+        st.image(URL_QR, caption="App Online", width=150)
+        st.caption(f"[Acceder a la App]({APP_URL})")
+
     if nat_sel:
         debe_expandir = len(nat_sel) == 1
         df_f = df_raiz[df_raiz['Naturaleza'].isin(nat_sel)].copy()
@@ -175,8 +176,6 @@ if df is not None:
                 
                 c1, c2 = st.columns(2)
                 ivan, trad = str(row.get('Int_IVAN', '')).strip(), str(row.get('Int_TRAD', '')).strip()
-                
-                # INVERSIÓN DE COLORES: IVAN (Verde/Success) y TRAD (Azul/Info)
                 if ivan and ivan.lower() != 'nan': c1.success(f"**Intervalos IVAN:**\n\n{ivan}")
                 if trad and trad.lower() != 'nan': c2.info(f"**Intervalos TRAD:**\n\n{trad}")
                 
