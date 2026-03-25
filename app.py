@@ -1,21 +1,41 @@
 import streamlit as st
 import pandas as pd
+import requests
+from fpdf import FPDF
+from io import BytesIO
 
-# 1. CONFIGURACIÓN
+# 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
+# Estilos CSS
 st.markdown("""
     <style>
     @media (prefers-color-scheme: dark) { .chord-img { filter: invert(1) hue-rotate(180deg); } }
-    .scroll-container { display: flex; overflow-x: auto; gap: 15px; padding: 10px 0; -webkit-overflow-scrolling: touch; }
-    .chord-item { flex: 0 0 auto; text-align: center; }
+    .scroll-container { display: flex; overflow-x: auto; gap: 15px; padding: 10px 0; }
+    div.stDownloadButton > button {
+        width: 100% !important;
+        border: 1px solid #ff4b4b;
+    }
+    .copy-btn {
+        width: 100%;
+        cursor: pointer;
+        background-color: #f0f2f6;
+        border: 1px solid #dcdfe3;
+        padding: 8px;
+        border-radius: 5px;
+        font-size: 14px;
+        transition: 0.3s;
+    }
+    .copy-btn:hover { background-color: #e0e2e6; }
     </style>
 """, unsafe_allow_html=True)
 
 # 2. CARGA DE DATOS
+# IMPORTANTE: Usamos la URL original de tu App principal
 APP_URL = "https://diccionario-acordes-xz99pzx875gw2ytzpqacv.streamlit.app/"
 URL_EXCEL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
 URL_QR = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={APP_URL}"
+GITHUB_BASE = "https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main"
 
 @st.cache_data
 def load():
@@ -25,92 +45,108 @@ def load():
         return df
     except: return None
 
-df = load()
+class PDF_Final(FPDF):
+    def footer(self):
+        self.set_y(-15)
+        self.set_font("helvetica", "B", 12)
+        self.set_text_color(190, 190, 190)
+        self.cell(0, 10, "Maxi Heras - Tucumán", align='R')
 
+def generar_pdf(dataframe_seleccionado):
+    pdf = PDF_Final(orientation='P', unit='mm', format='A4')
+    pdf.set_auto_page_break(auto=True, margin=20)
+    for _, row in dataframe_seleccionado.iterrows():
+        pdf.add_page()
+        pdf.set_font("helvetica", "B", 24)
+        pdf.cell(0, 20, f"{row['Raiz']} {row['Naturaleza']}", border=1, ln=True, align='C')
+        pdf.ln(8) 
+        pdf.set_font("helvetica", "B", 11)
+        pdf.set_text_color(60, 60, 60)
+        notas = [str(row.get(n,'')) for n in ['N1','N2','N3','N4'] if pd.notna(row.get(n))]
+        pdf.write(5, f"Notas: {' - '.join(notas)}\n")
+        pdf.write(5, f"Intervalos IVAN: {str(row.get('Int_IVAN', 'N/A'))}\n")
+        pdf.write(5, f"Intervalos TRAD: {str(row.get('Int_TRAD', 'N/A'))}\n")
+        pdf.ln(10)
+        X_START, GAP_X, COLS, DIAG_W, DIAG_H = 15, 5, 4, 38, 45
+        y_curr, count = pdf.get_y(), 0
+        for i in range(1, 10):
+            val = str(row.get(f'Diagrama{i}', 'nan')).strip()
+            if val.lower().endswith('.png'):
+                url_img = f"{GITHUB_BASE}/{str(row['Naturaleza']).replace(' ', '%20')}/{val.split('/')[-1]}"
+                try:
+                    img_data = requests.get(url_img, timeout=5).content
+                    col, fila = count % COLS, count // COLS
+                    pos_x, pos_y = X_START + (col * (DIAG_W + GAP_X)), y_curr + (fila * (DIAG_H + 10))
+                    if pos_y + DIAG_H > 265:
+                        pdf.add_page()
+                        y_curr, pos_y, count = 20, 20, 0
+                    pdf.image(BytesIO(img_data), x=pos_x, y=pos_y, w=DIAG_W, h=DIAG_H)
+                    pdf.set_xy(pos_x, pos_y + DIAG_H + 1)
+                    pdf.set_font("helvetica", "", 9)
+                    pdf.cell(DIAG_W, 5, f"P{i}", align='C')
+                    count += 1
+                except: continue
+    return pdf.output()
+
+df = load()
 if df is not None:
-    # 3. BARRA LATERAL
+    orden_notas = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B']
+    orden_tipos = ["MAYOR", "MENOR", "DOMINANTE", "AUMENTADO", "DISMINUIDO", "SEMIDISMINUIDO", "MAJ7", "MENOR7"]
+    
     with st.sidebar:
         st.header("🔍 Buscar Acorde")
-        
-        notas_orden = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B']
-        r_list = [n for n in notas_orden if n in df['Raiz'].unique()]
+        r_list = [n for n in orden_notas if n in df['Raiz'].unique()]
         raiz_sel = st.selectbox("Nota Raíz:", r_list)
         
         df_raiz = df[df['Raiz'] == raiz_sel]
+        opciones = [t for t in orden_tipos if t in df_raiz['Naturaleza'].unique()]
         
-        # ORDEN PERSONALIZADO
-        orden_deseado = ["MAYOR", "MENOR", "DOMINANTE", "AUMENTADO", "DISMINUIDO", "SEMIDISMINUIDO", "MAJ7", "MENOR7"]
-        tipos_reales = df_raiz['Naturaleza'].unique()
-        opciones_finales = [t for t in orden_deseado if t in tipos_reales] + sorted([t for t in tipos_reales if t not in orden_deseado])
+        if "ultima_raiz" not in st.session_state or st.session_state.ultima_raiz != raiz_sel:
+            st.session_state.ultima_raiz = raiz_sel
+            st.session_state.seleccionados = opciones
 
-        # --- LÓGICA DE CONTROL DE SELECCIÓN ---
-        if 'selector_key' not in st.session_state:
-            st.session_state.selector_key = 0
-        if 'valores_actuales' not in st.session_state:
-            st.session_state.valores_actuales = opciones_finales
+        nat_sel = st.multiselect("Tipo:", opciones, key="seleccionados")
 
-        # El multiselect usa una 'key' que cambia para forzar el refresco
-        nat_sel = st.multiselect(
-            "Tipo:", 
-            options=opciones_finales, 
-            default=st.session_state.valores_actuales,
-            key=f"ms_{st.session_state.selector_key}"
-        )
-
-        col_btn1, col_btn2 = st.columns(2)
-        
-        if col_btn1.button("Todo", use_container_width=True):
-            st.session_state.valores_actuales = opciones_finales
-            st.session_state.selector_key += 1 # Cambiamos la key para resetear el widget
+        c1, c2 = st.columns(2)
+        if c1.button("Todo", use_container_width=True):
+            st.session_state.seleccionados = opciones
             st.rerun()
-
-        if col_btn2.button("Limpiar", use_container_width=True):
-            st.session_state.valores_actuales = []
-            st.session_state.selector_key += 1 # Cambiamos la key para resetear el widget
+        if c2.button("Limpiar", use_container_width=True):
+            st.session_state.seleccionados = []
             st.rerun()
         
         st.write("---")
-        st.image(URL_QR, caption="Escanear para compartir", width=180)
-        st.caption("**Enlace de la App:**")
-        st.code(APP_URL, language=None)
 
-    # 4. RESULTADOS
+        if st.button("📥 Generar PDF", use_container_width=True):
+            if not nat_sel:
+                st.warning("Selecciona al menos un tipo.")
+            else:
+                with st.spinner("Generando..."):
+                    pdf_bytes = generar_pdf(df_raiz[df_raiz['Naturaleza'].isin(nat_sel)])
+                    st.download_button("🔥 Descargar", data=bytes(pdf_bytes), file_name=f"Acordes_{raiz_sel}.pdf", mime="application/pdf", use_container_width=True)
+
+        st.write("---")
+        st.image(URL_QR, caption="App Online", width=150)
+        st.write("Link de la App:")
+        
+        copy_html = f"""
+            <button class="copy-btn" onclick="navigator.clipboard.writeText('{APP_URL}')">
+            📋 Toca para copiar enlace
+            </button>
+        """
+        st.components.v1.html(copy_html, height=50)
+
     if nat_sel:
-        # Re-ordenar el DataFrame para los resultados
-        df_f = df_raiz[df_raiz['Naturaleza'].isin(nat_sel)].copy()
-        df_f['Naturaleza'] = pd.Categorical(df_f['Naturaleza'], categories=opciones_finales, ordered=True)
-        df_f = df_f.sort_values('Naturaleza')
-        
-        # Si hay más de 1 tipo, aparece contraído
-        esta_expandido = True if len(nat_sel) == 1 else False
-        
-        for idx, row in df_f.iterrows():
-            with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=esta_expandido):
-                notas = [str(row[c]).strip() for c in ['N1','N2','N3','N4'] 
-                         if c in row and pd.notna(row[c]) and str(row[c]).lower() not in ['nan','','0']]
-                st.write(f"**Notas:** {' - '.join(notas)}")
-                
-                c1, c2 = st.columns(2)
-                ivan = str(row.get('Int_IVAN', '')).strip()
-                trad = str(row.get('Int_TRAD', '')).strip()
-                if ivan and ivan.lower() not in ['nan', '0', '']: c1.info(f"**Int_IVAN:**\n\n{ivan}")
-                if trad and trad.lower() not in ['nan', '0', '']: c2.success(f"**Int_TRAD:**\n\n{trad}")
-                
-                st.write("---")
-                
+        # Se muestran contraídos por defecto
+        for _, row in df_raiz[df_raiz['Naturaleza'].isin(nat_sel)].iterrows():
+            with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=False):
+                col1, col2 = st.columns(2)
+                col1.success(f"**IVAN:** {row.get('Int_IVAN','')}")
+                col2.info(f"**TRAD:** {row.get('Int_TRAD','')}")
                 h_items = ""
-                GITHUB_BASE = "https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main"
                 for i in range(1, 10):
-                    val = str(row.get(f'Diagrama{i}', 'nan')).strip()
-                    if val.lower().endswith('.png'):
-                        nombre_archivo = val.split('/')[-1]
-                        nat_url = str(row['Naturaleza']).replace(' ', '%20')
-                        url_img = f"{GITHUB_BASE}/{nat_url}/{nombre_archivo}"
-                        h_items += f'<div class="chord-item"><img src="{url_img}" class="chord-img" width="110"><p style="font-size:12px;color:gray;">P{i}</p></div>'
-                
-                if h_items:
-                    st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
-    else:
-        st.info("Elegí un acorde en el menú lateral.")
-else:
-    st.error("Error al cargar la base de datos.")
+                    v = str(row.get(f'Diagrama{i}', 'nan'))
+                    if v.lower().endswith('.png'):
+                        url = f"{GITHUB_BASE}/{str(row['Naturaleza']).replace(' ', '%20')}/{v.split('/')[-1]}"
+                        h_items += f'<div style="flex:0 0 auto; text-align:center;"><img src="{url}" width="100"><p style="font-size:10px;">P{i}</p></div>'
+                st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
