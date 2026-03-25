@@ -16,7 +16,6 @@ st.markdown("""
         width: 100% !important;
         border: 1px solid #ff4b4b;
     }
-    /* Estilo para el botón de copia personalizado */
     .copy-btn {
         width: 100%;
         cursor: pointer;
@@ -44,6 +43,13 @@ def load():
         df.columns = [str(c).strip() for c in df.columns]
         return df
     except: return None
+
+# Funciones Callback para evitar el error de StreamlitAPIException
+def seleccionar_todo(opciones):
+    st.session_state.seleccionados = opciones
+
+def limpiar_todo():
+    st.session_state.seleccionados = []
 
 class PDF_Final(FPDF):
     def footer(self):
@@ -105,15 +111,13 @@ if df is not None:
             st.session_state.ultima_raiz = raiz_sel
             st.session_state.seleccionados = opciones
 
+        # Multiselect con clave estable
         nat_sel = st.multiselect("Tipo:", opciones, key="seleccionados")
 
+        # Botones Todo / Limpiar usando on_click para evitar excepciones
         c1, c2 = st.columns(2)
-        if c1.button("Todo", use_container_width=True):
-            st.session_state.seleccionados = opciones
-            st.rerun()
-        if c2.button("Limpiar", use_container_width=True):
-            st.session_state.seleccionados = []
-            st.rerun()
+        c1.button("Todo", use_container_width=True, on_click=seleccionar_todo, args=(opciones,))
+        c2.button("Limpiar", use_container_width=True, on_click=limpiar_todo)
         
         st.write("---")
 
@@ -126,7 +130,6 @@ if df is not None:
                     st.download_button("🔥 Descargar", data=bytes(pdf_bytes), file_name=f"Acordes_{raiz_sel}.pdf", mime="application/pdf", use_container_width=True)
 
         st.write("---")
-        # RESTAURADO: QR y Enlace de Copia
         st.image(URL_QR, caption="App Online", width=150)
         st.write("Link de la App:")
         
