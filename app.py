@@ -15,7 +15,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 2. CARGA DE DATOS Y URLS
+# 2. CARGA DE DATOS
 APP_URL = "https://diccionario-acordes-okhwulgyz9ueachvkdfh26.streamlit.app/"
 URL_EXCEL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
 URL_QR = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={APP_URL}"
@@ -55,19 +55,29 @@ if df is not None:
         st.session_state.sb_state = "collapsed"
         df_f = df_raiz[df_raiz['Naturaleza'].isin(nat_sel)]
         
-        # Determinar si las pestañas deben estar contraídas (si hay más de un tipo seleccionado)
+        # Pestañas contraídas si hay más de un tipo
         esta_expandido = False if len(nat_sel) > 1 else True
         
         for idx, row in df_f.iterrows():
             with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=esta_expandido):
-                # Sección de Notas
+                # NOTAS
                 notas = [str(row[c]).strip() for c in ['N1','N2','N3','N4'] if pd.notna(row.get(c)) and str(row[c]).lower() not in ['nan','','0']]
                 st.write(f"**Notas:** {' - '.join(notas)}")
                 
-                # Sección de Intervalos (Restaurada)
-                intervalos = [str(row[c]).strip() for c in ['I1','I2','I3','I4'] if pd.notna(row.get(c)) and str(row[c]).lower() not in ['nan','','0']]
-                if intervalos:
-                    st.write(f"**Intervalos:** {' - '.join(intervalos)}")
+                # INTERVALOS ESPECÍFICOS (Restaurados)
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # Mostrar Int_IVAN
+                    ivan = str(row.get('Int_IVAN', '')).strip()
+                    if ivan and ivan.lower() not in ['nan', '0', '']:
+                        st.info(f"**Int_IVAN:**\n\n{ivan}")
+                
+                with col2:
+                    # Mostrar Int_TRAD
+                    trad = str(row.get('Int_TRAD', '')).strip()
+                    if trad and trad.lower() not in ['nan', '0', '']:
+                        st.success(f"**Int_TRAD:**\n\n{trad}")
                 
                 st.write("---")
                 
