@@ -21,8 +21,28 @@ st.markdown("""
     [data-testid="stSidebar"] [data-testid="stHorizontalBlock"] { display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; gap: 5px !important; }
     [data-testid="stSidebar"] [data-testid="column"] { width: 32% !important; flex: 1 1 32% !important; min-width: 32% !important; }
     .stButton > button { width: 100% !important; padding: 5px 2px !important; font-size: 13px !important; min-height: 42px !important; border-radius: 6px !important; }
-    /* Ajuste para el input de copia */
-    .stTextInput > div > div > input { color: #555 !important; font-size: 12px !important; }
+    
+    /* Estilo del botón de copia protegido */
+    .copy-box {
+        background-color: #f0f2f6;
+        border: 1px solid #d3d3d3;
+        border-radius: 5px;
+        padding: 8px;
+        cursor: pointer;
+        text-align: center;
+        transition: background 0.2s;
+    }
+    .copy-box:hover { background-color: #e0e2e6; }
+    .copy-input {
+        border: none;
+        background: transparent;
+        width: 100%;
+        text-align: center;
+        font-size: 13px;
+        color: #31333F;
+        cursor: pointer;
+        outline: none;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -39,6 +59,7 @@ def load():
         return df
     except: return None
 
+# Estados de sesión
 if "seleccionados" not in st.session_state: st.session_state.seleccionados = []
 if "notas_inversas" not in st.session_state: st.session_state.notas_inversas = set()
 if "pdf_data" not in st.session_state: st.session_state.pdf_data = None
@@ -59,6 +80,7 @@ def mostrar_detalle_acorde(row):
     lista_n = [str(row.get(n,'')) for n in ['N1','N2','N3','N4'] if pd.notna(row.get(n))]
     st.write(f"**Notas:** {' - '.join(lista_n)}")
     c1, c2 = st.columns(2)
+    # Colores invertidos: IVAN (Verde/Success), TRAD (Azul/Info)
     with c1: st.success(f"**Int_IVAN:** {row.get('Int_IVAN','N/A')}") 
     with c2: st.info(f"**Int_TRAD:** {row.get('Int_TRAD','N/A')}")
     st.write("---")
@@ -72,6 +94,7 @@ def mostrar_detalle_acorde(row):
             h_items += f'<div class="chord-diag-item"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
     if h_items: st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
 
+# 3. MOTOR PDF CON ALINEACIÓN CORREGIDA
 class PDF_Final(FPDF):
     def footer(self):
         self.set_y(-15)
@@ -168,9 +191,26 @@ if df is not None:
         qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={urllib.parse.quote(APP_URL)}"
         st.image(qr_url, caption="Escaneá para abrir", width=180)
         
-        # MÉTODO OFICIAL DE COPIA (Sin JavaScript que falle)
-        st.text_input("📋 Enlace de la app:", value=APP_URL, help="Copia el enlace de arriba")
-        st.caption("Selecciona el texto de arriba para copiarlo.")
+        # BOTÓN DE COPIAR PROTEGIDO (Sólo lectura, autoselección)
+        st.markdown(f"""
+            <div class="copy-box" onclick="copyFunc()">
+                <small style="color:gray;">📋 Clic para copiar enlace:</small>
+                <input type="text" value="{APP_URL}" id="myUrl" class="copy-input" readonly>
+                <div id="copy-confirm" style="display:none; color: #00873c; font-size: 11px; font-weight: bold; margin-top:5px;">✅ ¡Copiado al Portapapeles!</div>
+            </div>
+            <script>
+            function copyFunc() {{
+              var copyText = document.getElementById("myUrl");
+              copyText.select();
+              copyText.setSelectionRange(0, 99999);
+              navigator.clipboard.writeText(copyText.value);
+              
+              var confirm = document.getElementById("copy-confirm");
+              confirm.style.display = "block";
+              setTimeout(function(){{ confirm.style.display = "none"; }}, 2000);
+            }}
+            </script>
+        """, unsafe_allow_html=True)
 
     # CUERPO PRINCIPAL
     if modo == "Diccionario 📖":
