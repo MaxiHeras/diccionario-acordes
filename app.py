@@ -15,9 +15,9 @@ st.markdown("""
     .scroll-container { display: flex; overflow-x: auto; gap: 15px; padding: 10px 0; }
     .chord-img-web { width: 150px; height: auto; display: block; margin: 0 auto; }
     
-    /* ESPACIADO PARA EL SELECTOR DE MODO */
-    [data-testid="stWidgetLabel"] p { margin-bottom: 15px !important; font-weight: bold; }
-    div[data-testid="stRadio"] > div { gap: 20px !important; padding: 10px 0; }
+    /* SEPARACIÓN DE MODOS */
+    div[data-testid="stRadio"] > div { gap: 25px !important; padding: 15px 0; }
+    [data-testid="stWidgetLabel"] p { font-weight: bold; font-size: 16px; }
 
     [data-testid="stHorizontalBlock"] { display: flex !important; flex-direction: row !important; flex-wrap: wrap !important; gap: 4px !important; }
     [data-testid="column"] { width: 31% !important; flex: 1 1 31% !important; min-width: 31% !important; }
@@ -46,15 +46,24 @@ def load():
         return df
     except: return None
 
+# Inicialización de estados
 if "seleccionados" not in st.session_state: st.session_state.seleccionados = []
 if "notas_inversas" not in st.session_state: st.session_state.notas_inversas = set()
 if "pdf_data" not in st.session_state: st.session_state.pdf_data = None
+if "descargado" not in st.session_state: st.session_state.descargado = False
 
 def seleccionar_todo(opciones): st.session_state.seleccionados = opciones
-def limpiar_todo(): st.session_state.seleccionados = []
+def limpiar_todo(): 
+    st.session_state.seleccionados = []
+    st.session_state.pdf_data = None
+    st.session_state.descargado = False
+
 def toggle_nota(nota):
     if nota in st.session_state.notas_inversas: st.session_state.notas_inversas.remove(nota)
     else: st.session_state.notas_inversas.add(nota)
+
+def confirmar_descarga():
+    st.session_state.descargado = True
 
 # 3. MOTOR PDF
 class PDF_Final(FPDF):
@@ -98,7 +107,6 @@ if df is not None:
     orden_tipos = ["MAYOR", "MENOR", "DOMINANTE", "AUMENTADO", "DISMINUIDO", "SEMIDISMINUIDO", "MAJ7", "MENOR7"]
     
     with st.sidebar:
-        # SECCIÓN MODO CON MÁS ESPACIO
         st.subheader("Seleccionar Modo")
         modo = st.radio(" ", ["Diccionario 📖", "Identificador 🔍"], label_visibility="collapsed")
         st.write("---")
@@ -112,6 +120,7 @@ if df is not None:
                 st.session_state.ultima_raiz_control = raiz_sel
                 st.session_state.seleccionados = opciones
                 st.session_state.pdf_data = None 
+                st.session_state.descargado = False
 
             st.multiselect("Tipo:", opciones, key="seleccionados")
             c1, c2 = st.columns(2)
@@ -120,12 +129,20 @@ if df is not None:
             
             st.write("")
             placeholder = st.empty()
+            
+            # LÓGICA DE TEXTO DINÁMICO
+            if st.session_state.descargado:
+                placeholder.markdown("✅ **¡Listo, guardado!**")
+            elif st.session_state.pdf_data:
+                placeholder.markdown("✅ *¡Listo para guardar!*")
+
             if st.button("📥 Generar PDF de Selección", use_container_width=True):
                 df_para_pdf = df_raiz[df_raiz['Naturaleza'].isin(st.session_state.seleccionados)]
                 if not df_para_pdf.empty:
                     placeholder.markdown("⏳ *Preparando PDF...*")
                     st.session_state.pdf_data = generar_pdf(df_para_pdf)
-                    placeholder.markdown("✅ *¡Listo para guardar!*")
+                    st.session_state.descargado = False
+                    st.rerun()
                 else:
                     st.warning("Seleccioná acordes primero.")
 
@@ -134,9 +151,10 @@ if df is not None:
                     label="💾 GUARDAR ARCHIVO",
                     data=bytes(st.session_state.pdf_data),
                     file_name=f"Acordes_{raiz_sel}.pdf",
-                    mime="application/pdf", # IMPORTANTE: Ayuda al móvil a identificar el archivo
+                    mime="application/pdf",
                     use_container_width=True,
-                    type="primary"
+                    type="primary",
+                    on_click=confirmar_descarga
                 )
 
             st.write("---")
@@ -181,19 +199,3 @@ if df is not None:
                             url = f"{GITHUB_BASE}/{str(row['Naturaleza']).replace(' ', '%20')}/{v.split('/')[-1]}"
                             h_items += f'<div style="flex:0 0 auto; text-align:center;"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
                     st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
-
-    else: # MODO IDENTIFICADOR
-        seleccion = st.session_state.notas_inversas
-        if seleccion:
-            res = df[df.apply(lambda r: seleccion == {str(r[n]) for n in ['N1','N2','N3','N4'] if pd.notna(r[n])}, axis=1)]
-            if not res.empty:
-                for _, row in res.iterrows():
-                    with st.expander(f"✅ {row['Raiz']} {row['Naturaleza']}", expanded=True):
-                        st.info(f"**IVAN:** {row.get('Int_IVAN','')} | **TRAD:** {row.get('Int_TRAD','')}")
-                        h_items = ""
-                        for j in range(1, 10):
-                            v = str(row.get(f'Diagrama{j}', 'nan'))
-                            if v.lower().endswith('.png'):
-                                url = f"{GITHUB_BASE}/{str(row['Naturaleza']).replace(' ', '%20')}/{v.split('/')[-1]}"
-                                h_items += f'<div style="flex:0 0 auto; text-align:center;"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
-                        st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
