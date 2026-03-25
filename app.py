@@ -22,11 +22,12 @@ st.markdown("""
     [data-testid="stSidebar"] [data-testid="column"] { width: 32% !important; flex: 1 1 32% !important; min-width: 32% !important; }
     .stButton > button { width: 100% !important; padding: 5px 2px !important; font-size: 13px !important; min-height: 42px !important; border-radius: 6px !important; }
     
-    /* Estilo para que el input de copia se vea limpio */
-    .stTextInput > div > div > input {
+    /* Estilo para que el texto de la URL sea legible aunque esté deshabilitado */
+    .stTextInput input:disabled {
+        -webkit-text-fill-color: #31333F !important;
+        opacity: 1 !important;
         cursor: text !important;
-        font-family: monospace;
-        font-size: 12px !important;
+        background-color: #f0f2f6 !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -65,7 +66,6 @@ def mostrar_detalle_acorde(row):
     lista_n = [str(row.get(n,'')) for n in ['N1','N2','N3','N4'] if pd.notna(row.get(n))]
     st.write(f"**Notas:** {' - '.join(lista_n)}")
     c1, c2 = st.columns(2)
-    # Colores corregidos
     with c1: st.success(f"**Int_IVAN:** {row.get('Int_IVAN','N/A')}") 
     with c2: st.info(f"**Int_TRAD:** {row.get('Int_TRAD','N/A')}")
     st.write("---")
@@ -79,7 +79,6 @@ def mostrar_detalle_acorde(row):
             h_items += f'<div class="chord-diag-item"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
     if h_items: st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
 
-# 3. MOTOR PDF
 class PDF_Final(FPDF):
     def footer(self):
         self.set_y(-15)
@@ -176,9 +175,9 @@ if df is not None:
         qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={urllib.parse.quote(APP_URL)}"
         st.image(qr_url, caption="Escaneá para abrir", width=180)
         
-        # URL VISIBLE CON ICONO DE COPIA (Sin JavaScript fallido)
-        st.text_input("📋 Copiar enlace:", value=APP_URL, disabled=False, label_visibility="collapsed")
-        st.caption("Tocá el icono de la derecha para copiar.")
+        # URL DE SOLO LECTURA (Sin iconos confusos, segura y fácil de seleccionar)
+        st.text_input("Enlace de la app:", value=APP_URL, disabled=True)
+        st.caption("Seleccioná la URL de arriba para copiarla.")
 
     # CUERPO PRINCIPAL
     if modo == "Diccionario 📖":
