@@ -1,5 +1,7 @@
 import streamlit as st
 import pandas as pd
+from fpdf import FPDF
+import datetime
 
 # 1. CONFIGURACIÓN
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
@@ -12,7 +14,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 2. CARGA DE DATOS
+# 2. CARGA DE DATOS Y VARIABLES
 APP_URL = "https://diccionario-acordes-okhwulgyz9ueachvkdfh26.streamlit.app/"
 URL_EXCEL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
 URL_QR = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={APP_URL}"
@@ -27,8 +29,41 @@ def load():
 
 df = load()
 
+# FUNCIÓN PARA GENERAR PDF
+def create_pdf(df_filtered):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(190, 10, "Hoja de Estudio de Acordes", ln=True, align="C")
+    pdf.set_font("Arial", "", 10)
+    pdf.cell(190, 10, f"Generado el: {datetime.date.today()}", ln=True, align="C")
+    pdf.ln(10)
+    
+    for _, row in df_filtered.iterrows():
+        pdf.set_font("Arial", "B", 12)
+        pdf.cell(0, 10, f"Acorde: {row['Raiz']} {row['Naturaleza']}", ln=True)
+        pdf.set_font("Arial", "", 10)
+        
+        # Notas e Intervalos
+        notas = [str(row[c]) for c in ['N1','N2','N3','N4'] if pd.notna(row.get(c)) and str(row[c]) not in ['0','nan']]
+        pdf.cell(0, 7, f"Notas: {' - '.join(notas)}", ln=True)
+        
+        ivan = str(row.get('Int_IVAN', ''))
+        if ivan and ivan.lower() not in ['nan', '0', '']:
+            pdf.cell(0, 7, f"Int_IVAN: {ivan}", ln=True)
+            
+        trad = str(row.get('Int_TRAD', ''))
+        if trad and trad.lower() not in ['nan', '0', '']:
+            pdf.cell(0, 7, f"Int_TRAD: {trad}", ln=True)
+        
+        pdf.ln(5)
+        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+        pdf.ln(5)
+        
+    return pdf.output(dest='S').encode('latin-1')
+
 if df is not None:
-    # 3. BARRA LATERAL (Sin botón, ahora es automática)
+    # 3. BARRA LATERAL
     with st.sidebar:
         st.header("🔍 Buscar Acorde")
         notas_orden = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B']
@@ -36,26 +71,38 @@ if df is not None:
         raiz_sel = st.selectbox("Nota Raíz:", r_list)
         
         df_raiz = df[df['Raiz'] == raiz_sel]
-        # Al quitar el botón, los resultados se actualizan cada vez que cambias esto
         nat_sel = st.multiselect("Tipo:", options=df_raiz['Naturaleza'].unique())
         
         st.write("---")
+        
+        # BOTÓN WHATSAPP
+        texto_wa = f"Mira este diccionario de acordes: {APP_URL}"
+        link_wa = f"https://wa.me/?text={texto_wa.replace(' ', '%20')}"
+        st.link_button("📲 Compartir por WhatsApp", link_wa, use_container_width=True)
+        
         st.image(URL_QR, caption="Escanear para compartir", width=180)
-        st.caption(f"**Enlace de la App:**")
         st.code(APP_URL, language=None)
 
     # 4. RESULTADOS
     if nat_sel:
         df_f = df_raiz[df_raiz['Naturaleza'].isin(nat_sel)]
+        
+        # BOTÓN GENERADOR DE PDF
+        pdf_data = create_pdf(df_f)
+        st.download_button(
+            label="📄 Descargar Hoja de Estudio (PDF)",
+            data=pdf_data,
+            file_name=f"Acordes_{raiz_sel}.pdf",
+            mime="application/pdf"
+        )
+        
         esta_expandido = False if len(nat_sel) > 1 else True
         
         for idx, row in df_f.iterrows():
             with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=esta_expandido):
-                # NOTAS
                 notas = [str(row[c]).strip() for c in ['N1','N2','N3','N4'] if pd.notna(row.get(c)) and str(row[c]).lower() not in ['nan','','0']]
                 st.write(f"**Notas:** {' - '.join(notas)}")
                 
-                # INTERVALOS (Iván y Tradicional)
                 col1, col2 = st.columns(2)
                 with col1:
                     ivan = str(row.get('Int_IVAN', '')).strip()
@@ -68,10 +115,8 @@ if df is not None:
                 
                 st.write("---")
                 
-                # GALERÍA HORIZONTAL
                 h_items = ""
                 GITHUB_BASE = "https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main"
-                
                 for i in range(1, 10):
                     val = str(row.get(f'Diagrama{i}', 'nan')).strip()
                     if val.lower().endswith('.png'):
@@ -82,9 +127,7 @@ if df is not None:
                 
                 if h_items:
                     st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
-                else:
-                    st.warning("No hay diagramas disponibles.")
     else:
-        st.info("Elegí un acorde en el menú lateral para empezar.")
+        st.info("Elegí un acorde en el menú lateral.")
 else:
     st.error("Error al cargar el Excel.")
