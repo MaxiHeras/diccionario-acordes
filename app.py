@@ -4,7 +4,6 @@ import pandas as pd
 # 1. CONFIGURACIÓN DE PÁGINA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
-# Estilos visuales para el scroll de diagramas e inversión de colores en modo oscuro
 st.markdown("""
     <style>
     @media (prefers-color-scheme: dark) { .chord-img { filter: invert(1) hue-rotate(180deg); } }
@@ -13,7 +12,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 2. CONFIGURACIÓN DE DATOS Y COMPARTIR
+# 2. CONFIGURACIÓN DE DATOS
 APP_URL = "https://diccionario-acordes-kmwrk2p5uzfumx5tac3ff4.streamlit.app/"
 URL_EXCEL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
 URL_QR = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={APP_URL}"
@@ -34,20 +33,28 @@ if df is not None:
     with st.sidebar:
         st.header("🔍 Buscar Acorde")
         
-        # Ordenamos las notas para el selector
         notas_orden = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B']
         r_list = [n for n in notas_orden if n in df['Raiz'].unique()]
         raiz_sel = st.selectbox("Nota Raíz:", r_list)
         
-        # Filtramos las naturalezas según la nota raíz elegida
         df_raiz = df[df['Raiz'] == raiz_sel]
-        opciones_tipo = sorted(df_raiz['Naturaleza'].unique())
         
-        # Multiselect con todos los tipos seleccionados por defecto
+        # --- LÓGICA DE ORDEN PERSONALIZADO ---
+        orden_deseado = ["MAYOR", "MENOR", "DOMINANTE", "AUMENTADO", "DISMINUIDO", "SEMIDISMINUIDO", "MAJ7", "MENOR7"]
+        
+        # Obtenemos los tipos reales que existen para esa nota en tu Excel
+        tipos_reales = df_raiz['Naturaleza'].unique()
+        
+        # Filtramos y ordenamos: primero los que están en nuestra lista, luego cualquier otro que aparezca
+        opciones_tipo = [t for t in orden_deseado if t in tipos_reales]
+        otros_tipos = [t for t in tipos_reales if t not in orden_deseado]
+        opciones_finales = opciones_tipo + sorted(otros_tipos)
+        
+        # Multiselect con todas seleccionadas por defecto en el orden correcto
         nat_sel = st.multiselect(
             "Tipo:", 
-            options=opciones_tipo, 
-            default=opciones_tipo
+            options=opciones_finales, 
+            default=opciones_finales
         )
         
         st.write("---")
@@ -57,16 +64,18 @@ if df is not None:
 
     # 4. RESULTADOS
     if nat_sel:
-        df_f = df_raiz[df_raiz['Naturaleza'].isin(nat_sel)]
+        # Importante: Re-ordenamos el DataFrame final para que los expansores sigan el orden pedido
+        df_f = df_raiz[df_raiz['Naturaleza'].isin(nat_sel)].copy()
+        df_f['Naturaleza'] = pd.Categorical(df_f['Naturaleza'], categories=opciones_finales, ordered=True)
+        df_f = df_f.sort_values('Naturaleza')
         
-        # LÓGICA DE EXPANSIÓN: Si hay más de 1 tipo seleccionado, aparece contraído (False)
-        # Si hay solo 1, aparece expandido (True)
+        # Lógica de expansión: contraído si hay más de 1
         expandir_por_defecto = True if len(nat_sel) == 1 else False
         
         for idx, row in df_f.iterrows():
             with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=expandir_por_defecto):
                 
-                # NOTAS (N1 a N4)
+                # NOTAS
                 notas = [str(row[c]).strip() for c in ['N1','N2','N3','N4'] 
                          if c in row and pd.notna(row[c]) and str(row[c]).lower() not in ['nan','','0']]
                 st.write(f"**Notas:** {' - '.join(notas)}")
@@ -83,7 +92,7 @@ if df is not None:
                 
                 st.write("---")
                 
-                # GALERÍA DE DIAGRAMAS (Carga desde GitHub)
+                # GALERÍA
                 h_items = ""
                 GITHUB_BASE = "https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main"
                 
@@ -92,7 +101,6 @@ if df is not None:
                     val = str(row.get(col_diag, 'nan')).strip()
                     if val.lower().endswith('.png'):
                         nombre_archivo = val.split('/')[-1]
-                        # Reemplazamos espacios por %20 para URLs válidas
                         naturaleza_url = str(row['Naturaleza']).replace(' ', '%20')
                         url_img = f"{GITHUB_BASE}/{naturaleza_url}/{nombre_archivo}"
                         
@@ -106,8 +114,8 @@ if df is not None:
                 if h_items:
                     st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
                 else:
-                    st.warning("No hay diagramas disponibles para este acorde.")
+                    st.warning("No hay diagramas disponibles.")
     else:
-        st.info("Selecciona al menos un tipo de acorde en el menú lateral.")
+        st.info("Selecciona al menos un tipo de acorde.")
 else:
-    st.error("No se pudo cargar la base de datos. Verifica la conexión con el Excel.")
+    st.error("Error al cargar la base de datos.")
