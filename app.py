@@ -8,32 +8,32 @@ import urllib.parse
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
-# CSS - MEJORAS DE DISEÑO Y COMPARTIR
+# CSS DEFINITIVO: FUERZA 3 COLUMNAS Y BOTONES LINDOS
 st.markdown("""
     <style>
     @media (prefers-color-scheme: dark) { .chord-img-web { filter: invert(1) hue-rotate(180deg); } }
     .scroll-container { display: flex; overflow-x: auto; gap: 15px; padding: 10px 0; }
     .chord-img-web { width: 150px; height: auto; display: block; margin: 0 auto; }
     
-    /* FUERZA 3 COLUMNAS EN MÓVIL */
-    [data-testid="stHorizontalBlock"] { display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; gap: 5px !important; }
-    [data-testid="column"] { width: 33% !important; flex: 1 1 33% !important; min-width: 33% !important; }
+    /* BLOQUE ANTIA-PILAMIENTO PARA CELULARES */
+    [data-testid="stHorizontalBlock"] {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: wrap !important;
+        gap: 4px !important;
+    }
+    [data-testid="column"] {
+        width: 31% !important; /* Un poquito menos de 33 para dar aire */
+        flex: 1 1 31% !important;
+        min-width: 31% !important;
+    }
 
-    .stButton > button { width: 100% !important; padding: 5px 2px !important; font-size: 13px !important; min-height: 40px !important; border-radius: 8px !important; }
-    
-    /* Estilo del link interactivo */
-    .copy-link {
-        background-color: #f0f2f6;
-        padding: 8px;
-        border-radius: 5px;
-        border: 1px solid #ff4b4b;
-        color: #ff4b4b;
-        text-align: center;
-        font-family: monospace;
-        cursor: pointer;
-        font-size: 12px;
-        display: block;
-        text-decoration: none;
+    .stButton > button {
+        width: 100% !important;
+        padding: 5px 2px !important;
+        font-size: 13px !important;
+        min-height: 42px !important;
+        border-radius: 6px !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -112,25 +112,25 @@ if df is not None:
             
             if "ultima_raiz_control" not in st.session_state or st.session_state.ultima_raiz_control != raiz_sel:
                 st.session_state.ultima_raiz_control = raiz_sel
-                st.session_state.seleccionados = opciones
+                st.session_state.seleccionados = opciones # Selecciona todos por defecto
             
             st.multiselect("Tipo:", opciones, key="seleccionados")
             c1, c2 = st.columns(2)
             c1.button("Todo", on_click=seleccionar_todo, args=(opciones,), use_container_width=True)
             c2.button("Limpiar", on_click=limpiar_todo, use_container_width=True)
             
-            # --- COMPARTIR RE-ORDENADO ---
+            # --- COMPARTIR ---
             st.write("---")
             st.write("📲 **Compartir App**")
+            # QR arreglado sin el parámetro problemático
             qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={urllib.parse.quote(APP_URL)}"
-            st.image(qr_url, caption="Escaneá para abrir", use_container_width=True)
-            
-            # Link para copiar debajo del QR
-            st.write("Toca para copiar link:")
+            st.image(qr_url, caption="Escaneá para abrir")
+            st.write("Toca para copiar:")
             st.code(APP_URL, language=None)
         
         else:
             st.header("🔍 Identificador")
+            # Bucle forzado de 3 columnas
             for i in range(0, len(notas_musicales), 3):
                 cols = st.columns(3)
                 for j in range(3):
@@ -145,14 +145,12 @@ if df is not None:
     # --- PANTALLA PRINCIPAL ---
     if modo == "Diccionario 📖":
         if st.session_state.seleccionados:
-            # Botón de PDF al principio para fácil acceso
-            pdf_btn_col1, _ = st.columns([1, 2])
-            if pdf_btn_col1.button("📥 Generar PDF de esta selección"):
+            # BOTÓN PDF REINCORPORADO
+            if st.button("📥 Generar PDF de esta selección"):
                 pdf_bytes = generar_pdf(df_raiz[df_raiz['Naturaleza'].isin(st.session_state.seleccionados)])
-                st.download_button("Click aquí para descargar archivo", data=bytes(pdf_bytes), file_name=f"Acordes_{raiz_sel}.pdf")
+                st.download_button("Click aquí para guardar archivo", data=bytes(pdf_bytes), file_name=f"Diccionario_{raiz_sel}.pdf")
             
             st.write("---")
-            
             tabs_ordenados = [t for t in orden_tipos if t in st.session_state.seleccionados]
             tabs = st.tabs(tabs_ordenados)
             for i, tab in enumerate(tabs):
@@ -170,21 +168,3 @@ if df is not None:
                             url = f"{GITHUB_BASE}/{str(row['Naturaleza']).replace(' ', '%20')}/{v.split('/')[-1]}"
                             h_items += f'<div style="flex:0 0 auto; text-align:center;"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
                     st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
-
-    elif modo == "Identificador 🔍":
-        seleccion = st.session_state.notas_inversas
-        if seleccion:
-            st.write(f"**Notas:** {' - '.join(sorted(list(seleccion)))}")
-            res = df[df.apply(lambda r: seleccion == {str(r[n]) for n in ['N1','N2','N3','N4'] if pd.notna(r[n])}, axis=1)]
-            if not res.empty:
-                for _, row in res.iterrows():
-                    with st.expander(f"✅ {row['Raiz']} {row['Naturaleza']}", expanded=True):
-                        st.write(f"**IVAN:** {row.get('Int_IVAN','')} | **TRAD:** {row.get('Int_TRAD','')}")
-                        h_items = ""
-                        for j in range(1, 10):
-                            v = str(row.get(f'Diagrama{j}', 'nan'))
-                            if v.lower().endswith('.png'):
-                                url = f"{GITHUB_BASE}/{str(row['Naturaleza']).replace(' ', '%20')}/{v.split('/')[-1]}"
-                                h_items += f'<div style="flex:0 0 auto; text-align:center;"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
-                        st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
-            else: st.warning("Sin coincidencias.")
