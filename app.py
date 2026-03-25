@@ -59,12 +59,12 @@ if df is not None:
 
         col_btn1, col_btn2 = st.columns(2)
         
-        if col_btn1.button("✅ Todo", use_container_width=True):
+        if col_btn1.button("Todo", use_container_width=True):
             st.session_state.valores_actuales = opciones_finales
             st.session_state.selector_key += 1 # Cambiamos la key para resetear el widget
             st.rerun()
 
-        if col_btn2.button("❌ Limpiar", use_container_width=True):
+        if col_btn2.button("Limpiar", use_container_width=True):
             st.session_state.valores_actuales = []
             st.session_state.selector_key += 1 # Cambiamos la key para resetear el widget
             st.rerun()
