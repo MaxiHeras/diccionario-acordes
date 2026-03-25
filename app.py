@@ -29,7 +29,7 @@ def load():
         return df
     except: return None
 
-# --- FUNCIÓN PARA GENERAR PDF ---
+# --- FUNCIÓN PARA GENERAR PDF (REVISADA PARA TAMAÑO Y ALINEACIÓN) ---
 def generar_pdf(dataframe_seleccionado):
     pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.set_auto_page_break(auto=True, margin=15)
@@ -57,14 +57,17 @@ def generar_pdf(dataframe_seleccionado):
         
         pdf.ln(10) # Espacio antes de los diagramas
 
-        # --- LÓGICA DE DIAGRAMAS (4 por fila, sin superposición) ---
-        X_START = 15
-        DIAG_WIDTH = 42   # Tamaño reducido para evitar que se pisen
-        GAP_X = 6         # Espacio entre columnas
-        GAP_Y = 12        # Espacio entre filas
-        COLS = 4
+        # --- LÓGICA DE DIAGRAMAS (REVISADA PARA UNIFORMIDAD) ---
+        # Dimensiones de la cuadrícula y diagramas (en mm)
+        X_START = 15          # Margen izquierdo
+        GAP_X = 5             # Espacio entre columnas
+        GAP_Y = 10            # Espacio vertical fijo
+        COLS = 4              # Número de diagramas por fila
         
-        # Guardamos la posición Y donde empiezan los diagramas
+        # TAMAÑO FIJO PARA TODOS (esto es lo importante para la uniformidad)
+        DIAG_WIDTH = 38       # Un poco más chicos (era 42)
+        DIAG_HEIGHT = 45      # Altura FIJA para todos (fuerza el escalado)
+        
         y_inicial_fila = pdf.get_y()
         count = 0
         
@@ -79,21 +82,28 @@ def generar_pdf(dataframe_seleccionado):
                     img_data = requests.get(url_img, timeout=5).content
                     img_buffer = BytesIO(img_data)
                     
+                    # Calcular posición
                     col = count % COLS
                     fila = count // COLS
                     
+                    # Si cambiamos de fila, actualizamos la Y inicial de la fila
+                    if col == 0 and fila > 0:
+                        y_inicial_fila += (DIAG_HEIGHT + GAP_Y)
+                    
+                    # Calcular X e Y absolutos
                     pos_x = X_START + (col * (DIAG_WIDTH + GAP_X))
-                    # La Y se calcula sumando el alto estimado del diagrama + el GAP
-                    pos_y = y_inicial_fila + (fila * 55) 
                     
-                    # Salto de página si el diagrama va a quedar fuera
-                    if pos_y > 250:
+                    # Salto de página si el diagrama va a quedar fuera (margen inferior de 15mm)
+                    if y_inicial_fila + DIAG_HEIGHT > 282: 
                         pdf.add_page()
-                        y_inicial_fila = 20
-                        pos_y = 20
-                        count = 0 # Reiniciamos contador para la nueva página
+                        y_inicial_fila = 20 # Reseteamos Y en la nueva página
+                        # Si es el primer diagrama de la página, resetear X e Y
+                        pos_x = X_START + (col * (DIAG_WIDTH + GAP_X))
                     
-                    pdf.image(img_buffer, x=pos_x, y=pos_y, w=DIAG_WIDTH)
+                    # Ponemos la imagen FFPDF la escalará para que encaje en el ancho Y el alto
+                    # Usamos `keep_aspect_ratio=True` (por defecto) para que no se deforme
+                    pdf.image(img_buffer, x=pos_x, y=y_inicial_fila, w=DIAG_WIDTH, h=DIAG_HEIGHT)
+                    
                     count += 1
                 except:
                     continue
@@ -143,28 +153,31 @@ if df is not None:
         # --- EXPORTACIÓN PDF ---
         st.write("---")
         if nat_sel:
+            # Preparamos los datos
             df_export = df_raiz[df_raiz['Naturaleza'].isin(nat_sel)].copy()
+            # Aseguramos el orden correcto de los acordes en el PDF
             df_export['Naturaleza'] = pd.Categorical(df_export['Naturaleza'], categories=opciones_finales, ordered=True)
             df_export = df_export.sort_values('Naturaleza')
 
+            # Botón para generar (esto evita errores de Streamlit)
             if st.button("📥 Generar PDF", use_container_width=True):
-                with st.spinner("Creando PDF..."):
+                with st.spinner("Descargando diagramas y armando PDF..."):
                     try:
                         pdf_bytes = generar_pdf(df_export)
                         st.download_button(
-                            label="🔥 Descargar archivo PDF",
+                            label="🔥 ¡Listo! Descargar archivo",
                             data=bytes(pdf_bytes),
                             file_name=f"Acordes_{raiz_sel}.pdf",
                             mime="application/pdf",
                             use_container_width=True
                         )
                     except Exception as e:
-                        st.error(f"Error: {e}")
+                        st.error(f"Error al crear el PDF: {e}")
         
         st.write("---")
         st.image(URL_QR, caption="Escanear para compartir", width=180)
 
-    # 4. RESULTADOS (WEB)
+    # 4. RESULTADOS VISUALES (App web, sin cambios)
     if nat_sel:
         df_f = df_raiz[df_raiz['Naturaleza'].isin(nat_sel)].copy()
         df_f['Naturaleza'] = pd.Categorical(df_f['Naturaleza'], categories=opciones_finales, ordered=True)
