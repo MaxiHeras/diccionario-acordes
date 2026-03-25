@@ -130,9 +130,9 @@ if df is not None:
             st.write("")
             placeholder = st.empty()
             
-            # LÓGICA DE TEXTO DINÁMICO
+            # LÓGICA DE TEXTO DINÁMICO EN CURSIVA
             if st.session_state.descargado:
-                placeholder.markdown("✅ **¡Listo, guardado!**")
+                placeholder.markdown("✅ *¡Listo, guardado!*")
             elif st.session_state.pdf_data:
                 placeholder.markdown("✅ *¡Listo para guardar!*")
 
@@ -199,3 +199,19 @@ if df is not None:
                             url = f"{GITHUB_BASE}/{str(row['Naturaleza']).replace(' ', '%20')}/{v.split('/')[-1]}"
                             h_items += f'<div style="flex:0 0 auto; text-align:center;"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
                     st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
+
+    else: # MODO IDENTIFICADOR
+        seleccion = st.session_state.notas_inversas
+        if seleccion:
+            res = df[df.apply(lambda r: seleccion == {str(r[n]) for n in ['N1','N2','N3','N4'] if pd.notna(r[n])}, axis=1)]
+            if not res.empty:
+                for _, row in res.iterrows():
+                    with st.expander(f"✅ {row['Raiz']} {row['Naturaleza']}", expanded=True):
+                        st.info(f"**IVAN:** {row.get('Int_IVAN','')} | **TRAD:** {row.get('Int_TRAD','')}")
+                        h_items = ""
+                        for j in range(1, 10):
+                            v = str(row.get(f'Diagrama{j}', 'nan'))
+                            if v.lower().endswith('.png'):
+                                url = f"{GITHUB_BASE}/{str(row['Naturaleza']).replace(' ', '%20')}/{v.split('/')[-1]}"
+                                h_items += f'<div style="flex:0 0 auto; text-align:center;"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
+                        st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
