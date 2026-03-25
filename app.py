@@ -7,26 +7,33 @@ from io import BytesIO
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
-# CSS AGRESIVO PARA FORZAR COLUMNAS EN CELULAR
+# CSS AGRESIVO PARA FORZAR GRILLA EN CELULAR
 st.markdown("""
     <style>
     @media (prefers-color-scheme: dark) { .chord-img-web { filter: invert(1) hue-rotate(180deg); } }
     .scroll-container { display: flex; overflow-x: auto; gap: 15px; padding: 10px 0; }
-    div.stDownloadButton > button { width: 100% !important; border: 1px solid #ff4b4b; }
     .chord-img-web { width: 150px; height: auto; display: block; margin: 0 auto; }
     
-    /* ESTE BLOQUE FUERZA LAS 3 COLUMNAS EN EL CELULAR */
-    [data-testid="column"] {
-        width: 33.33% !important;
-        flex: 0 0 33.33% !important;
-        min-width: 33.33% !important;
+    /* FUERZA 3 COLUMNAS EN MÓVIL */
+    [data-testid="stHorizontalBlock"] {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        gap: 5px !important;
     }
-    
-    /* Ajuste de botones para que no se encimen */
+    [data-testid="column"] {
+        width: 33% !important;
+        flex: 1 1 33% !important;
+        min-width: 33% !important;
+    }
+
+    /* Ajuste de botones para que no se deformen */
     .stButton > button {
-        margin-bottom: 2px !important;
+        width: 100% !important;
         padding: 5px 2px !important;
-        font-size: 14px !important;
+        font-size: 13px !important;
+        min-height: 40px !important;
+        border-radius: 8px !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -52,7 +59,7 @@ def toggle_nota(nota):
     if nota in st.session_state.notas_inversas: st.session_state.notas_inversas.remove(nota)
     else: st.session_state.notas_inversas.add(nota)
 
-# Clase PDF (Mantenemos igual para tus descargas)
+# (Clase PDF y Función generar_pdf se mantienen igual que antes)
 class PDF_Final(FPDF):
     def footer(self):
         self.set_y(-15)
@@ -110,21 +117,21 @@ if df is not None:
                 st.session_state.ultima_raiz_control = raiz_sel
                 st.session_state.seleccionados = opciones
             
-            nat_sel = st.multiselect("Tipo:", opciones, key="seleccionados")
+            st.multiselect("Tipo:", opciones, key="seleccionados")
             c1, c2 = st.columns(2)
             c1.button("Todo", on_click=seleccionar_todo, args=(opciones,), use_container_width=True)
             c2.button("Limpiar", on_click=limpiar_todo, use_container_width=True)
         
         else:
             st.header("🔍 Identificador")
-            # Forzamos 3 columnas fijas con el CSS de arriba
+            # Forzamos 3 columnas fijas en cada fila
             for i in range(0, len(notas_musicales), 3):
                 cols = st.columns(3)
                 for j in range(3):
                     if i + j < len(notas_musicales):
                         n = notas_musicales[i + j]
                         activo = n in st.session_state.notas_inversas
-                        if cols[j].button(n, key=f"inv_{n}", use_container_width=True, type="primary" if activo else "secondary"):
+                        if cols[j].button(n, key=f"inv_{n}", type="primary" if activo else "secondary"):
                             toggle_nota(n)
                             st.rerun()
             
@@ -147,9 +154,7 @@ if df is not None:
                         st.markdown(f"### {row['Raiz']} {row['Naturaleza']}")
                         lista_n = [str(row.get(n,'')) for n in ['N1','N2','N3','N4'] if pd.notna(row.get(n))]
                         st.write(f"**Notas:** {' - '.join(lista_n)}")
-                        col1, col2 = st.columns(2)
-                        col1.success(f"**IVAN:** {row.get('Int_IVAN','')}")
-                        col2.info(f"**TRAD:** {row.get('Int_TRAD','')}")
+                        st.write(f"**IVAN:** {row.get('Int_IVAN','')} | **TRAD:** {row.get('Int_TRAD','')}")
                         h_items = ""
                         for j in range(1, 10):
                             v = str(row.get(f'Diagrama{j}', 'nan'))
@@ -160,9 +165,9 @@ if df is not None:
             
             if st.button("📥 Descargar PDF"):
                 pdf_bytes = generar_pdf(df_raiz[df_raiz['Naturaleza'].isin(st.session_state.seleccionados)])
-                st.download_button("Click aquí para descargar", data=bytes(pdf_bytes), file_name=f"Acordes_{raiz_sel}.pdf")
+                st.download_button("Guardar archivo", data=bytes(pdf_bytes), file_name=f"Acordes_{raiz_sel}.pdf")
 
-    else: # MODO IDENTIFICADOR
+    else: # IDENTIFICADOR
         seleccion = st.session_state.notas_inversas
         if seleccion:
             st.write(f"**Notas:** {' - '.join(sorted(list(seleccion)))}")
@@ -173,9 +178,7 @@ if df is not None:
             if not res.empty:
                 for _, row in res.iterrows():
                     with st.expander(f"✅ {row['Raiz']} {row['Naturaleza']}", expanded=True):
-                        # Aquí NO usamos columnas para los resultados, para que se vea bien en celular
-                        st.success(f"**IVAN:** {row.get('Int_IVAN','')}")
-                        st.info(f"**TRAD:** {row.get('Int_TRAD','')}")
+                        st.write(f"**IVAN:** {row.get('Int_IVAN','')} | **TRAD:** {row.get('Int_TRAD','')}")
                         h_items = ""
                         for j in range(1, 10):
                             v = str(row.get(f'Diagrama{j}', 'nan'))
@@ -183,4 +186,4 @@ if df is not None:
                                 url = f"{GITHUB_BASE}/{str(row['Naturaleza']).replace(' ', '%20')}/{v.split('/')[-1]}"
                                 h_items += f'<div style="flex:0 0 auto; text-align:center;"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
                         st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
-            else: st.warning("No se encontró coincidencia exacta.")
+            else: st.warning("Sin coincidencias.")
