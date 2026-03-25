@@ -8,7 +8,7 @@ import urllib.parse
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
-# CSS: AJUSTES DE POSICIÓN PARA ELIMINAR ESPACIOS EN BLANCO
+# CSS: POSICIONAMIENTO Y ESPACIADO DE LA APP
 st.markdown("""
     <style>
     [data-testid="stSidebarUserContent"] { padding-top: 0.5rem !important; }
@@ -25,7 +25,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # 2. CARGA DE DATOS
-APP_URL = "https://diccionario-acordes-xz99pzx875gw2ytzpqacv.streamlit.app/"
+APP_URL = "https://diccionario-acordes-xz99pzx875gw2ytzpqxacv.streamlit.app/"
 URL_EXCEL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
 GITHUB_BASE = "https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main"
 
@@ -37,7 +37,7 @@ def load():
         return df
     except: return None
 
-# Estados iniciales
+# Estados de sesión
 if "seleccionados" not in st.session_state: st.session_state.seleccionados = []
 if "notas_inversas" not in st.session_state: st.session_state.notas_inversas = set()
 if "pdf_data" not in st.session_state: st.session_state.pdf_data = None
@@ -72,7 +72,7 @@ def mostrar_detalle_acorde(row):
             h_items += f'<div class="chord-diag-item"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
     if h_items: st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
 
-# 3. MOTOR PDF CORREGIDO
+# 3. MOTOR PDF CON ESPACIADO CORREGIDO
 class PDF_Final(FPDF):
     def footer(self):
         self.set_y(-15)
@@ -85,33 +85,32 @@ def generar_pdf(dataframe_seleccionado):
     pdf.set_auto_page_break(auto=True, margin=20)
     for _, row in dataframe_seleccionado.iterrows():
         pdf.add_page()
-        # Título del acorde
         pdf.set_font("helvetica", "B", 24)
         pdf.cell(0, 20, f"{row['Raiz']} {row['Naturaleza']}", border=1, ln=True, align='C')
         pdf.ln(8) 
         
-        # Línea de Notas
-        notas_str = [str(row.get(n,'')) for n in ['N1','N2','N3','N4'] if pd.notna(row.get(n))]
+        # Notas
         pdf.set_font("helvetica", "B", 11)
         pdf.write(6, "Notas: ")
         pdf.set_font("helvetica", "", 11)
-        pdf.write(6, f"{' - '.join(notas_str)}\n")
+        pdf.write(6, f"{' - '.join([str(row.get(n,'')) for n in ['N1','N2','N3','N4'] if pd.notna(row.get(n))])}\n")
         
-        # Línea de Int_IVAN
+        # IVAN
         pdf.set_font("helvetica", "B", 11)
         pdf.write(6, "Int_IVAN: ")
         pdf.set_font("helvetica", "", 11)
         pdf.write(6, f"{str(row.get('Int_IVAN', 'N/A'))}\n")
         
-        # Línea de Int_TRAD
+        # TRAD
         pdf.set_font("helvetica", "B", 11)
         pdf.write(6, "Int_TRAD: ")
         pdf.set_font("helvetica", "", 11)
         pdf.write(6, f"{str(row.get('Int_TRAD', 'N/A'))}\n")
         
-        pdf.ln(10)
+        # AJUSTE: Espacio entre intervalos y diagramas
+        pdf.ln(14) 
         
-        # Grilla de Diagramas
+        # Diagramas
         X_START, GAP_X, COLS, DIAG_W, DIAG_H = 15, 5, 4, 38, 45
         y_curr, count = pdf.get_y(), 0
         for i in range(1, 10):
@@ -128,7 +127,7 @@ def generar_pdf(dataframe_seleccionado):
                 except: continue
     return pdf.output()
 
-# --- LÓGICA PRINCIPAL ---
+# --- LÓGICA DE INTERFAZ ---
 df = load()
 if df is not None:
     notas_musicales = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B']
@@ -198,7 +197,7 @@ if df is not None:
         qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={urllib.parse.quote(APP_URL)}"
         st.image(qr_url, caption="Escaneá para abrir", width=180)
 
-    # --- CUERPO PRINCIPAL ---
+    # CUERPO PRINCIPAL
     if modo == "Diccionario 📖":
         st.header(f"📖 Diccionario: {raiz_sel}")
         tipos_visibles = [t for t in orden_tipos if t in st.session_state.seleccionados]
@@ -216,4 +215,4 @@ if df is not None:
         if notas_act:
             if not res.empty: mostrar_detalle_acorde(res.iloc[0])
             else: st.warning("Acorde no identificado.")
-        else: st.info("Seleccioná notas en la barra lateral para identificar el acorde.")
+        else: st.info("Seleccioná notas en la barra lateral.")
