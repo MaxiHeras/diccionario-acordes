@@ -7,16 +7,27 @@ from io import BytesIO
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
-# Estilos CSS para botones y contenedores
+# Estilos CSS
 st.markdown("""
     <style>
     @media (prefers-color-scheme: dark) { .chord-img { filter: invert(1) hue-rotate(180deg); } }
     .scroll-container { display: flex; overflow-x: auto; gap: 15px; padding: 10px 0; }
-    /* Estilo para que el botón de descarga ocupe todo el ancho como el de Generar */
     div.stDownloadButton > button {
         width: 100% !important;
-        border: 1px solid #ff4b4b; /* Color similar al borde de Generar PDF */
+        border: 1px solid #ff4b4b;
     }
+    /* Estilo para el botón de copia personalizado */
+    .copy-btn {
+        width: 100%;
+        cursor: pointer;
+        background-color: #f0f2f6;
+        border: 1px solid #dcdfe3;
+        padding: 8px;
+        border-radius: 5px;
+        font-size: 14px;
+        transition: 0.3s;
+    }
+    .copy-btn:hover { background-color: #e0e2e6; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -90,15 +101,12 @@ if df is not None:
         df_raiz = df[df['Raiz'] == raiz_sel]
         opciones = [t for t in orden_tipos if t in df_raiz['Naturaleza'].unique()]
         
-        # Lógica para reiniciar selección al cambiar de nota raíz
         if "ultima_raiz" not in st.session_state or st.session_state.ultima_raiz != raiz_sel:
             st.session_state.ultima_raiz = raiz_sel
             st.session_state.seleccionados = opciones
 
-        # Multiselect primero
         nat_sel = st.multiselect("Tipo:", opciones, key="seleccionados")
 
-        # Botones Todo / Limpiar debajo del multiselect
         c1, c2 = st.columns(2)
         if c1.button("Todo", use_container_width=True):
             st.session_state.seleccionados = opciones
@@ -111,12 +119,23 @@ if df is not None:
 
         if st.button("📥 Generar PDF", use_container_width=True):
             if not nat_sel:
-                st.warning("Selecciona al menos un tipo de acorde.")
+                st.warning("Selecciona al menos un tipo.")
             else:
                 with st.spinner("Generando..."):
                     pdf_bytes = generar_pdf(df_raiz[df_raiz['Naturaleza'].isin(nat_sel)])
-                    # Botón de descarga con el mismo tamaño
                     st.download_button("🔥 Descargar", data=bytes(pdf_bytes), file_name=f"Acordes_{raiz_sel}.pdf", mime="application/pdf", use_container_width=True)
+
+        st.write("---")
+        # RESTAURADO: QR y Enlace de Copia
+        st.image(URL_QR, caption="App Online", width=150)
+        st.write("Link de la App:")
+        
+        copy_html = f"""
+            <button class="copy-btn" onclick="navigator.clipboard.writeText('{APP_URL}')">
+            📋 Toca para copiar enlace
+            </button>
+        """
+        st.components.v1.html(copy_html, height=50)
 
     if nat_sel:
         for _, row in df_raiz[df_raiz['Naturaleza'].isin(nat_sel)].iterrows():
