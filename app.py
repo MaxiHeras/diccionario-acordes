@@ -8,7 +8,7 @@ import urllib.parse
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
-# CSS: POSICIONAMIENTO Y ESPACIADO DE LA APP
+# CSS: AJUSTES DE POSICIÓN Y ESTILOS DE LA APP
 st.markdown("""
     <style>
     [data-testid="stSidebarUserContent"] { padding-top: 0.5rem !important; }
@@ -72,7 +72,7 @@ def mostrar_detalle_acorde(row):
             h_items += f'<div class="chord-diag-item"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
     if h_items: st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
 
-# 3. MOTOR PDF CON ESPACIADO CORREGIDO
+# 3. MOTOR PDF CON ALINEACIÓN CORREGIDA
 class PDF_Final(FPDF):
     def footer(self):
         self.set_y(-15)
@@ -89,30 +89,22 @@ def generar_pdf(dataframe_seleccionado):
         pdf.cell(0, 20, f"{row['Raiz']} {row['Naturaleza']}", border=1, ln=True, align='C')
         pdf.ln(8) 
         
-        # Notas
+        # Notas e Intervalos
         pdf.set_font("helvetica", "B", 11)
-        pdf.write(6, "Notas: ")
-        pdf.set_font("helvetica", "", 11)
+        pdf.write(6, "Notas: "); pdf.set_font("helvetica", "", 11)
         pdf.write(6, f"{' - '.join([str(row.get(n,'')) for n in ['N1','N2','N3','N4'] if pd.notna(row.get(n))])}\n")
-        
-        # IVAN
-        pdf.set_font("helvetica", "B", 11)
-        pdf.write(6, "Int_IVAN: ")
-        pdf.set_font("helvetica", "", 11)
+        pdf.set_font("helvetica", "B", 11); pdf.write(6, "Int_IVAN: "); pdf.set_font("helvetica", "", 11)
         pdf.write(6, f"{str(row.get('Int_IVAN', 'N/A'))}\n")
-        
-        # TRAD
-        pdf.set_font("helvetica", "B", 11)
-        pdf.write(6, "Int_TRAD: ")
-        pdf.set_font("helvetica", "", 11)
+        pdf.set_font("helvetica", "B", 11); pdf.write(6, "Int_TRAD: "); pdf.set_font("helvetica", "", 11)
         pdf.write(6, f"{str(row.get('Int_TRAD', 'N/A'))}\n")
         
-        # AJUSTE: Espacio entre intervalos y diagramas
-        pdf.ln(14) 
+        pdf.ln(14) # Espacio extra solicitado antes de diagramas
         
-        # Diagramas
-        X_START, GAP_X, COLS, DIAG_W, DIAG_H = 15, 5, 4, 38, 45
-        y_curr, count = pdf.get_y(), 0
+        # GRILLA DE DIAGRAMAS: Tamaño fijo y alineación estricta
+        X_START, GAP_X, GAP_Y, COLS, DIAG_W, DIAG_H = 15, 8, 12, 4, 38, 45
+        y_grid_top = pdf.get_y()
+        count = 0
+        
         for i in range(1, 10):
             val = str(row.get(f'Diagrama{i}', 'nan')).strip()
             if val.lower().endswith('.png'):
@@ -120,8 +112,12 @@ def generar_pdf(dataframe_seleccionado):
                 url_img = f"{GITHUB_BASE}/{nat_pdf}/{val.split('/')[-1]}"
                 try:
                     img_data = requests.get(url_img, timeout=5).content
-                    col, fila = count % COLS, count // COLS
-                    pos_x, pos_y = X_START + (col * (DIAG_W + GAP_X)), y_curr + (fila * (DIAG_H + 10))
+                    col = count % COLS
+                    fila = count // COLS
+                    # Cálculo exacto de posición para asegurar alineación vertical
+                    pos_x = X_START + (col * (DIAG_W + GAP_X))
+                    pos_y = y_grid_top + (fila * (DIAG_H + GAP_Y))
+                    
                     pdf.image(BytesIO(img_data), x=pos_x, y=pos_y, w=DIAG_W, h=DIAG_H)
                     count += 1
                 except: continue
@@ -138,12 +134,7 @@ if df is not None:
         modo = st.radio(" ", ["Diccionario 📖", "Identificador 🔍"], label_visibility="collapsed")
         st.write("---")
 
-        if st.session_state.modo_previo == "Identificador 🔍" and modo == "Diccionario 📖":
-            df_c = df[df['Raiz'] == 'C']
-            st.session_state.seleccionados = [t for t in orden_tipos if t in df_c['Naturaleza'].unique()]
-            st.session_state.u_raiz = 'C'
-        st.session_state.modo_previo = modo
-
+        # Lógica de Diccionario
         if modo == "Diccionario 📖":
             raiz_sel = st.selectbox("Nota Raíz:", [n for n in notas_musicales if n in df['Raiz'].unique()])
             df_raiz = df[df['Raiz'] == raiz_sel]
@@ -193,9 +184,13 @@ if df is not None:
                 st.session_state.notas_inversas = set(); st.rerun()
 
         st.write("---")
+        # RESTAURACIÓN DEL BOTÓN DE ENLACE Y QR
         st.write("📲 **Compartir App**")
         qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={urllib.parse.quote(APP_URL)}"
         st.image(qr_url, caption="Escaneá para abrir", width=180)
+        
+        # Botón para copiar el enlace
+        st.code(APP_URL, language=None)
 
     # CUERPO PRINCIPAL
     if modo == "Diccionario 📖":
