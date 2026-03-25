@@ -7,22 +7,33 @@ from io import BytesIO
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
-# Estilos CSS mejorados para los botones de notas
+# Estilos CSS - AJUSTE PARA BOTONERA EN CELULAR
 st.markdown("""
     <style>
     @media (prefers-color-scheme: dark) { .chord-img-web { filter: invert(1) hue-rotate(180deg); } }
     .scroll-container { display: flex; overflow-x: auto; gap: 15px; padding: 10px 0; }
     div.stDownloadButton > button { width: 100% !important; border: 1px solid #ff4b4b; }
+    
     .copy-btn {
         width: 100%; cursor: pointer; background-color: #f0f2f6;
         border: 1px solid #dcdfe3; padding: 8px; border-radius: 5px;
         font-size: 14px; transition: 0.3s;
     }
-    .copy-btn:hover { background-color: #e0e2e6; }
-    .chord-img-web { width: 150px; height: auto; display: block; margin: 0 auto; }
     
-    /* Estilo para los botones de notas tipo toggle */
-    .stButton > button { margin-bottom: 5px; }
+    .chord-img-web { width: 150px; height: auto; display: block; margin: 0 auto; }
+
+    /* FORZAR REJILLA DE BOTONES EN CELULAR */
+    [data-testid="column"] {
+        width: 23% !important;
+        flex: 1 1 23% !important;
+        min-width: 23% !important;
+    }
+    
+    /* Ajuste para que los botones de notas sean más compactos */
+    .stButton > button {
+        padding: 5px 2px !important;
+        font-size: 12px !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -40,10 +51,6 @@ def load():
         return df
     except: return None
 
-# Callbacks
-def seleccionar_todo(opciones): st.session_state.seleccionados = opciones
-def limpiar_todo(): st.session_state.seleccionados = []
-
 def toggle_nota(nota):
     if "notas_inversas" not in st.session_state:
         st.session_state.notas_inversas = set()
@@ -52,6 +59,7 @@ def toggle_nota(nota):
     else:
         st.session_state.notas_inversas.add(nota)
 
+# Clases de PDF (Sin cambios)
 class PDF_Final(FPDF):
     def footer(self):
         self.set_y(-15)
@@ -105,30 +113,22 @@ if df is not None:
             raiz_sel = st.selectbox("Nota Raíz:", r_list)
             df_raiz = df[df['Raiz'] == raiz_sel]
             opciones = [t for t in df_raiz['Naturaleza'].unique()]
-            
-            if "ultima_raiz" not in st.session_state or st.session_state.ultima_raiz != raiz_sel:
-                st.session_state.ultima_raiz = raiz_sel
-                st.session_state.seleccionados = opciones
-
             nat_sel = st.multiselect("Tipo:", opciones, key="seleccionados")
+            
             c1, c2 = st.columns(2)
-            c1.button("Todo", on_click=seleccionar_todo, args=(opciones,), use_container_width=True)
-            c2.button("Limpiar", on_click=limpiar_todo, use_container_width=True)
+            if c1.button("Todo", use_container_width=True): st.session_state.seleccionados = opciones; st.rerun()
+            if c2.button("Limpiar", use_container_width=True): st.session_state.seleccionados = []; st.rerun()
         
         else:
-            st.header("🔍 Identificar Acorde")
-            st.info("Toca las notas que estás presionando:")
-            
-            if "notas_inversas" not in st.session_state:
-                st.session_state.notas_inversas = set()
+            st.header("🔍 Identificar")
+            if "notas_inversas" not in st.session_state: st.session_state.notas_inversas = set()
 
-            # Botonera de notas (3 filas de 4 o 4 de 3 para celular)
+            # Forzamos las columnas para que no se apilen
             cols_notas = st.columns(4)
             for idx, n in enumerate(orden_notas_musicales):
                 with cols_notas[idx % 4]:
                     is_active = n in st.session_state.notas_inversas
-                    style = "primary" if is_active else "secondary"
-                    if st.button(n, key=f"btn_{n}", type=style, use_container_width=True):
+                    if st.button(n, key=f"btn_{n}", type="primary" if is_active else "secondary", use_container_width=True):
                         toggle_nota(n)
                         st.rerun()
             
@@ -137,49 +137,44 @@ if df is not None:
                 st.rerun()
 
         st.write("---")
-        st.image(URL_QR, caption="App Online", width=120)
+        st.image(URL_QR, width=120)
         copy_html = f"""<button class="copy-btn" onclick="navigator.clipboard.writeText('{APP_URL}')">📋 Copiar enlace</button>"""
         st.components.v1.html(copy_html, height=45)
 
     # --- VISUALIZACIÓN ---
-    if modo == "Diccionario 📖":
-        if nat_sel:
-            tabs = st.tabs(nat_sel)
-            for i, tab in enumerate(tabs):
-                with tab:
-                    tipo_actual = nat_sel[i]
-                    row = df_raiz[df_raiz['Naturaleza'] == tipo_actual].iloc[0]
-                    st.markdown(f"### {row['Raiz']} {row['Naturaleza']}")
-                    lista_n = [str(row.get(n,'')) for n in ['N1','N2','N3','N4'] if pd.notna(row.get(n))]
-                    st.write(f"**Notas:** {' - '.join(lista_n)}")
-                    col1, col2 = st.columns(2)
-                    col1.success(f"**IVAN:** {row.get('Int_IVAN','')}")
-                    col2.info(f"**TRAD:** {row.get('Int_TRAD','')}")
-                    h_items = ""
-                    for j in range(1, 10):
-                        v = str(row.get(f'Diagrama{j}', 'nan'))
-                        if v.lower().endswith('.png'):
-                            url = f"{GITHUB_BASE}/{str(row['Naturaleza']).replace(' ', '%20')}/{v.split('/')[-1]}"
-                            h_items += f'<div style="flex:0 0 auto; text-align:center;"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
-                    st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
-            
-            if st.button("📥 Generar PDF"):
-                pdf_bytes = generar_pdf(df_raiz[df_raiz['Naturaleza'].isin(nat_sel)])
-                st.download_button("Descargar PDF", data=bytes(pdf_bytes), file_name=f"Acordes_{raiz_sel}.pdf")
+    if modo == "Diccionario 📖" and 'nat_sel' in locals() and nat_sel:
+        tabs = st.tabs(nat_sel)
+        for i, tab in enumerate(tabs):
+            with tab:
+                tipo_actual = nat_sel[i]
+                row = df_raiz[df_raiz['Naturaleza'] == tipo_actual].iloc[0]
+                st.markdown(f"### {row['Raiz']} {row['Naturaleza']}")
+                lista_n = [str(row.get(n,'')) for n in ['N1','N2','N3','N4'] if pd.notna(row.get(n))]
+                st.write(f"**Notas:** {' - '.join(lista_n)}")
+                col1, col2 = st.columns(2)
+                col1.success(f"**IVAN:** {row.get('Int_IVAN','')}")
+                col2.info(f"**TRAD:** {row.get('Int_TRAD','')}")
+                h_items = ""
+                for j in range(1, 10):
+                    v = str(row.get(f'Diagrama{j}', 'nan'))
+                    if v.lower().endswith('.png'):
+                        url = f"{GITHUB_BASE}/{str(row['Naturaleza']).replace(' ', '%20')}/{v.split('/')[-1]}"
+                        h_items += f'<div style="flex:0 0 auto; text-align:center;"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
+                st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
+        
+        if st.button("📥 Generar PDF"):
+            pdf_bytes = generar_pdf(df_raiz[df_raiz['Naturaleza'].isin(nat_sel)])
+            st.download_button("Descargar PDF", data=bytes(pdf_bytes), file_name=f"Acordes_{raiz_sel}.pdf")
 
-    else: # MODO IDENTIFICADOR
+    elif modo == "Identificador 🔍":
         seleccion = st.session_state.notas_inversas
         if seleccion:
-            st.write(f"**Notas seleccionadas:** {' - '.join(sorted(list(seleccion)))}")
-            
+            st.write(f"**Buscando:** {' - '.join(sorted(list(seleccion)))}")
             def coincide(row):
                 notas_row = {str(row[n]) for n in ['N1', 'N2', 'N3', 'N4'] if pd.notna(row[n])}
                 return seleccion == notas_row
-            
             res = df[df.apply(coincide, axis=1)]
-            
             if not res.empty:
-                st.success(f"Se encontraron {len(res)} coincidencias:")
                 for _, row in res.iterrows():
                     with st.expander(f"✅ {row['Raiz']} {row['Naturaleza']}", expanded=True):
                         col1, col2 = st.columns(2)
@@ -193,6 +188,4 @@ if df is not None:
                                 h_items += f'<div style="flex:0 0 auto; text-align:center;"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
                         st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
             else:
-                st.warning("No hay acordes con ese grupo exacto de notas en tu base de datos.")
-        else:
-            st.write("Selecciona notas en el panel izquierdo para empezar.")
+                st.warning("No hay coincidencias exactas.")
