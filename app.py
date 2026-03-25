@@ -30,42 +30,30 @@ def load():
         return df
     except: return None
 
-# --- CLASE PDF CORREGIDA (Marca de agua sin hojas extra) ---
 class PDF_Final(FPDF):
     def footer(self):
-        # Posición a 1.5 cm del final
         self.set_y(-15)
         self.set_font("helvetica", "B", 12)
         self.set_text_color(190, 190, 190)
-        # Imprimir marca de agua
         self.cell(0, 10, "Maxi Heras - Tucumán", align='R')
 
 def generar_pdf(dataframe_seleccionado):
     pdf = PDF_Final(orientation='P', unit='mm', format='A4')
     pdf.set_auto_page_break(auto=True, margin=20)
-    
     for _, row in dataframe_seleccionado.iterrows():
         pdf.add_page()
-        
-        # TÍTULO
         pdf.set_font("helvetica", "B", 24)
         pdf.cell(0, 20, f"{row['Raiz']} {row['Naturaleza']}", border=1, ln=True, align='C')
         pdf.ln(8) 
-        
-        # INFO
         pdf.set_font("helvetica", "B", 11)
         pdf.set_text_color(60, 60, 60)
-        pdf.write(5, f"Notas: {str(row.get('N1',''))} - {str(row.get('N2',''))} - {str(row.get('N3',''))} - {str(row.get('N4',''))}\n")
+        notas = [str(row.get(n,'')) for n in ['N1','N2','N3','N4'] if pd.notna(row.get(n))]
+        pdf.write(5, f"Notas: {' - '.join(notas)}\n")
         pdf.write(5, f"Intervalos IVAN: {str(row.get('Int_IVAN', 'N/A'))}\n")
         pdf.write(5, f"Intervalos TRAD: {str(row.get('Int_TRAD', 'N/A'))}\n")
         pdf.ln(10)
-
-        # DIAGRAMAS
-        X_START, GAP_X, COLS = 15, 5, 4
-        DIAG_W, DIAG_H = 38, 45
-        y_curr = pdf.get_y()
-        count = 0
-        
+        X_START, GAP_X, COLS, DIAG_W, DIAG_H = 15, 5, 4, 38, 45
+        y_curr, count = pdf.get_y(), 0
         for i in range(1, 10):
             val = str(row.get(f'Diagrama{i}', 'nan')).strip()
             if val.lower().endswith('.png'):
@@ -73,14 +61,10 @@ def generar_pdf(dataframe_seleccionado):
                 try:
                     img_data = requests.get(url_img, timeout=5).content
                     col, fila = count % COLS, count // COLS
-                    pos_x = X_START + (col * (DIAG_W + GAP_X))
-                    pos_y = y_curr + (fila * (DIAG_H + 10))
-                    
-                    if pos_y + DIAG_H > 265: # Control de salto de página
+                    pos_x, pos_y = X_START + (col * (DIAG_W + GAP_X)), y_curr + (fila * (DIAG_H + 10))
+                    if pos_y + DIAG_H > 265:
                         pdf.add_page()
-                        y_curr = 20
-                        pos_y, pos_x, count = y_curr, X_START, 0
-
+                        y_curr, pos_y, count = 20, 20, 0
                     pdf.image(BytesIO(img_data), x=pos_x, y=pos_y, w=DIAG_W, h=DIAG_H)
                     pdf.set_xy(pos_x, pos_y + DIAG_H + 1)
                     pdf.set_font("helvetica", "", 9)
@@ -90,44 +74,42 @@ def generar_pdf(dataframe_seleccionado):
     return pdf.output()
 
 df = load()
-
 if df is not None:
-    # Orden musical de las notas
     orden_notas = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B']
+    orden_tipos = ["MAYOR", "MENOR", "DOMINANTE", "AUMENTADO", "DISMINUIDO", "SEMIDISMINUIDO", "MAJ7", "MENOR7"]
     
     with st.sidebar:
         st.header("🔍 Buscar Acorde")
         r_list = [n for n in orden_notas if n in df['Raiz'].unique()]
         raiz_sel = st.selectbox("Nota Raíz:", r_list)
-        
         df_raiz = df[df['Raiz'] == raiz_sel]
-        opciones = sorted(df_raiz['Naturaleza'].unique())
-        nat_sel = st.multiselect("Tipo:", opciones, default=opciones)
+        opciones = [t for t in orden_tipos if t in df_raiz['Naturaleza'].unique()]
+        
+        if 'sel' not in st.session_state: st.session_state.sel = opciones
+        
+        # Botones Todo / Limpiar
+        c1, c2 = st.columns(2)
+        if c1.button("Todo"): st.session_state.sel = opciones
+        if c2.button("Limpiar"): st.session_state.sel = []
+        
+        nat_sel = st.multiselect("Tipo:", opciones, key="sel")
 
         if st.button("📥 Generar PDF", use_container_width=True):
-            with st.spinner("Preparando documento..."):
+            with st.spinner("Generando..."):
                 pdf_bytes = generar_pdf(df_raiz[df_raiz['Naturaleza'].isin(nat_sel)])
-                st.download_button("🔥 Descargar Ahora", data=bytes(pdf_bytes), file_name=f"Acordes_{raiz_sel}.pdf", mime="application/pdf", use_container_width=True)
+                st.download_button("🔥 Descargar", data=bytes(pdf_bytes), file_name=f"Acordes_{raiz_sel}.pdf", mime="application/pdf")
 
-        st.write("---")
-        # QR Y COPIADO (Compatible con todas las versiones)
-        st.image(URL_QR, caption="App Online", width=150)
-        st.write("Link de la App:")
-        
-        # Botón de copia mediante HTML/JS
-        html_button = f"""
-            <button onclick="navigator.clipboard.writeText('{APP_URL}')" 
-            style="width:100%; cursor:pointer; background-color:#f0f2f6; border:1px solid #dcdfe3; padding:5px; border-radius:5px;">
-            📋 Toca para copiar enlace
-            </button>
-        """
-        st.components.v1.html(html_button, height=45)
-
-    # VISTA WEB
     if nat_sel:
+        # Mostrar contraído por defecto (expanded=False)
         for _, row in df_raiz[df_raiz['Naturaleza'].isin(nat_sel)].iterrows():
-            with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=True):
-                st.write(f"**Notas:** {row.get('N1','')} - {row.get('N2','')} - {row.get('N3','')} - {row.get('N4','')}")
+            with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=False):
                 col1, col2 = st.columns(2)
                 col1.success(f"**IVAN:** {row.get('Int_IVAN','')}")
                 col2.info(f"**TRAD:** {row.get('Int_TRAD','')}")
+                h_items = ""
+                for i in range(1, 10):
+                    v = str(row.get(f'Diagrama{i}', 'nan'))
+                    if v.lower().endswith('.png'):
+                        url = f"{GITHUB_BASE}/{str(row['Naturaleza']).replace(' ', '%20')}/{v.split('/')[-1]}"
+                        h_items += f'<div style="flex:0 0 auto; text-align:center;"><img src="{url}" width="100"><p style="font-size:10px;">P{i}</p></div>'
+                st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
