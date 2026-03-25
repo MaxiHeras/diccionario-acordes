@@ -3,10 +3,9 @@ import pandas as pd
 from fpdf import FPDF
 import datetime
 
-# 1. CONFIGURACIÓN INICIAL
+# 1. CONFIGURACIÓN VISUAL
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
-# Estilos para que las imágenes no salgan en negativo en modo oscuro y galería horizontal
 st.markdown("""
     <style>
     @media (prefers-color-scheme: dark) { .chord-img { filter: invert(1) hue-rotate(180deg); } }
@@ -31,31 +30,34 @@ def load():
 
 df = load()
 
-# FUNCIÓN PARA EL PDF (Ignora errores de caracteres raros)
+# FUNCIÓN GENERADORA DE PDF
 def create_pdf(df_filtered):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", "B", 16)
     pdf.cell(190, 10, "Hoja de Estudio de Acordes", ln=True, align="C")
     pdf.ln(10)
+    
     for _, row in df_filtered.iterrows():
         pdf.set_font("Arial", "B", 12)
         pdf.cell(0, 10, f"Acorde: {row['Raiz']} {row['Naturaleza']}", ln=True)
         pdf.set_font("Arial", "", 10)
-        notas = [str(row[c]) for c in ['N1','N2','N3','N4'] if pd.notna(row.get(c)) and str(row[c]) not in ['0','nan']]
-        pdf.cell(0, 7, f"Notas: {' - '.join(notas)}", ln=True)
         
-        # Intervalos en el PDF
-        ivan = str(row.get('Int_IVAN', ''))
+        n_list = [str(row[c]) for c in ['N1','N2','N3','N4'] if pd.notna(row.get(c)) and str(row[c]) not in ['0','nan','']]
+        pdf.cell(0, 7, f"Notas: {' - '.join(n_list)}", ln=True)
+        
+        ivan = str(row.get('Int_IVAN', '')).strip()
         if ivan and ivan.lower() not in ['nan', '0', '']:
             pdf.cell(0, 7, f"Int_IVAN: {ivan}", ln=True)
-        trad = str(row.get('Int_TRAD', ''))
+            
+        trad = str(row.get('Int_TRAD', '')).strip()
         if trad and trad.lower() not in ['nan', '0', '']:
             pdf.cell(0, 7, f"Int_TRAD: {trad}", ln=True)
         
         pdf.ln(5)
         pdf.line(10, pdf.get_y(), 200, pdf.get_y())
         pdf.ln(5)
+        
     return pdf.output(dest='S').encode('latin-1', 'ignore')
 
 if df is not None:
@@ -65,15 +67,15 @@ if df is not None:
         notas_orden = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B']
         r_list = [n for n in notas_orden if n in df['Raiz'].unique()]
         raiz_sel = st.selectbox("Nota Raíz:", r_list)
+        
         df_raiz = df[df['Raiz'] == raiz_sel]
         nat_sel = st.multiselect("Tipo:", options=df_raiz['Naturaleza'].unique())
         
         st.write("---")
-        # Botón de WhatsApp
-        texto_wa = f"Mirá este diccionario de acordes: {APP_URL}"
-        link_wa = f"https://wa.me/?text={texto_wa.replace(' ', '%20')}"
-        st.link_button("📲 Compartir por WhatsApp", link_wa, use_container_width=True)
-        
+        # Compartir
+        t_wa = f"Mirá este diccionario de acordes: {APP_URL}"
+        l_wa = f"https://wa.me/?text={t_wa.replace(' ', '%20')}"
+        st.link_button("📲 Compartir por WhatsApp", l_wa, use_container_width=True)
         st.image(URL_QR, caption="Escanear para compartir", width=180)
         st.code(APP_URL, language=None)
 
@@ -81,48 +83,48 @@ if df is not None:
     if nat_sel:
         df_f = df_raiz[df_raiz['Naturaleza'].isin(nat_sel)]
         
-        # Botón PDF (Protegido por si no cargó la librería aún)
+        # Botón PDF Seguro
         try:
             pdf_data = create_pdf(df_f)
             st.download_button("📄 Descargar Hoja de Estudio (PDF)", pdf_data, f"Acordes_{raiz_sel}.pdf", "application/pdf")
         except:
-            st.warning("El PDF se activará cuando GitHub termine de instalar la librería 'fpdf'.")
+            st.warning("El botón de PDF se activará cuando se complete la instalación de 'fpdf' en tu GitHub.")
 
         expandir = False if len(nat_sel) > 1 else True
         
         for idx, row in df_f.iterrows():
             with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=expandir):
-                # Notas
-                n_list = [str(row[c]).strip() for c in ['N1','N2','N3','N4'] if pd.notna(row.get(c)) and str(row[c]).lower() not in ['nan','','0']]
-                st.write(f"**Notas:** {' - '.join(n_list)}")
+                # Sección Notas
+                n_str = ' - '.join([str(row[c]).strip() for c in ['N1','N2','N3','N4'] if pd.notna(row.get(c)) and str(row[c]).lower() not in ['nan','','0']])
+                st.write(f"**Notas:** {n_str}")
                 
-                # Columnas de Intervalos corregidas
-                c1, c2 = st.columns(2)
-                with c1:
-                    ivan = str(row.get('Int_IVAN', '')).strip()
-                    if ivan and ivan.lower() not in ['nan', '0', '']:
-                        st.info(f"**Int_IVAN:**\n\n{ivan}")
-                with c2:
-                    trad = str(row.get('Int_TRAD', '')).strip()
-                    if trad and trad.lower() not in ['nan', '0', '']:
-                        st.success(f"**Int_TRAD:**\n\n{trad}")
+                # Sección Intervalos
+                col1, col2 = st.columns(2)
+                with col1:
+                    val_ivan = str(row.get('Int_IVAN', '')).strip()
+                    if val_ivan and val_ivan.lower() not in ['nan', '0', '']:
+                        st.info(f"**Int_IVAN:**\n\n{val_ivan}")
+                with col2:
+                    val_trad = str(row.get('Int_TRAD', '')).strip()
+                    if val_trad and val_trad.lower() not in ['nan', '0', '']:
+                        st.success(f"**Int_TRAD:**\n\n{val_trad}")
                 
                 st.write("---")
                 
-                # Galería de imágenes (Filtrada para evitar íconos rotos)
-                h_items = ""
-                GITHUB_BASE = "https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main"
+                # Galería de Imágenes (Filtrado para evitar iconos rotos)
+                h_html = ""
+                BASE = "https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main"
                 for i in range(1, 10):
-                    val = str(row.get(f'Diagrama{i}', 'nan')).strip()
-                    if val.lower().endswith('.png'):
-                        archivo = val.split('/')[-1]
-                        url_img = f"{GITHUB_BASE}/{row['Naturaleza']}/{archivo}"
-                        div_id = f"pos_{idx}_{i}"
-                        h_items += f'<div class="chord-item" id="{div_id}"><img src="{url_img}" class="chord-img" width="110" onerror="document.getElementById(\'{div_id}\').style.display=\'none\';"><p style="font-size:12px;color:gray;">P{i}</p></div>'
+                    v_img = str(row.get(f'Diagrama{i}', 'nan')).strip()
+                    if v_img.lower().endswith('.png'):
+                        archivo = v_img.split('/')[-1]
+                        url_final = f"{BASE}/{row['Naturaleza']}/{archivo}"
+                        d_id = f"pos_{idx}_{i}"
+                        h_html += f'<div class="chord-item" id="{d_id}"><img src="{url_final}" class="chord-img" width="110" onerror="document.getElementById(\'{d_id}\').style.display=\'none\';"><p style="font-size:12px;color:gray;">P{i}</p></div>'
                 
-                if h_items:
-                    st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
+                if h_html:
+                    st.markdown(f'<div class="scroll-container">{h_html}</div>', unsafe_allow_html=True)
     else:
         st.info("Elegí un acorde en el menú lateral.")
 else:
-    st.error("No se pudo cargar el Excel. Revisá la URL de Google Sheets.")
+    st.error("No se pudo cargar el Excel. Revisá que la URL de Google Sheets sea correcta.")
