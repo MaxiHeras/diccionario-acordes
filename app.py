@@ -13,9 +13,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # 2. CARGA DE DATOS
-APP_URL = "https://diccionario-acordes-okhwulgyz9ueachvkdfh26.streamlit.app/"
 URL_EXCEL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
-URL_QR = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={APP_URL}"
 
 @st.cache_data
 def load():
@@ -37,11 +35,6 @@ if df is not None:
         
         df_raiz = df[df['Raiz'] == raiz_sel]
         nat_sel = st.multiselect("Tipo:", options=df_raiz['Naturaleza'].unique())
-        
-        st.write("---")
-        st.image(URL_QR, caption="Escanear para compartir", width=180)
-        st.caption(f"**Enlace de la App:**")
-        st.code(APP_URL, language=None)
 
     # 4. RESULTADOS
     if nat_sel:
@@ -54,18 +47,7 @@ if df is not None:
                 notas = [str(row[c]).strip() for c in ['N1','N2','N3','N4'] if pd.notna(row.get(c)) and str(row[c]).lower() not in ['nan','','0']]
                 st.write(f"**Notas:** {' - '.join(notas)}")
                 
-                # INTERVALOS
-                col1, col2 = st.columns(2)
-                ivan = str(row.get('Int_IVAN', '')).strip()
-                trad = str(row.get('Int_TRAD', '')).strip()
-                if ivan and ivan.lower() not in ['nan', '0', '']:
-                    col1.info(f"**Int_IVAN:**\n\n{ivan}")
-                if trad and trad.lower() not in ['nan', '0', '']:
-                    col2.success(f"**Int_TRAD:**\n\n{trad}")
-                
-                st.write("---")
-                
-                # GALERÍA HORIZONTAL
+                # GALERÍA HORIZONTAL (Carga directa por URL)
                 h_items = ""
                 GITHUB_BASE = "https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main"
                 
@@ -73,16 +55,12 @@ if df is not None:
                     val = str(row.get(f'Diagrama{i}', 'nan')).strip()
                     if val.lower().endswith('.png'):
                         nombre_archivo = val.split('/')[-1]
-                        # El replace corrige problemas con espacios en los nombres de carpetas
                         url_img = f"{GITHUB_BASE}/{row['Naturaleza'].replace(' ', '%20')}/{nombre_archivo}"
-                        div_id = f"pos_{idx}_{i}"
-                        h_items += f'<div class="chord-item" id="{div_id}"><img src="{url_img}" class="chord-img" width="110"><p style="font-size:12px;color:gray;">P{i}</p></div>'
+                        h_items += f'<div class="chord-item"><img src="{url_img}" class="chord-img" width="110"><p style="font-size:12px;color:gray;">P{i}</p></div>'
                 
                 if h_items:
                     st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
-                else:
-                    st.warning("No hay diagramas disponibles.")
     else:
-        st.info("Elegí un acorde en el menú lateral para empezar.")
+        st.info("Elegí un acorde en el menú lateral.")
 else:
     st.error("Error al cargar el Excel.")
