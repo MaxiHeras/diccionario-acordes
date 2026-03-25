@@ -7,7 +7,7 @@ from io import BytesIO
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
-# Estilos CSS - ULTRA COMPACTO PARA MÓVIL
+# Estilos CSS - CUADRÍCULA PROFESIONAL
 st.markdown("""
     <style>
     @media (prefers-color-scheme: dark) { .chord-img-web { filter: invert(1) hue-rotate(180deg); } }
@@ -15,25 +15,22 @@ st.markdown("""
     div.stDownloadButton > button { width: 100% !important; border: 1px solid #ff4b4b; }
     .chord-img-web { width: 150px; height: auto; display: block; margin: 0 auto; }
     
-    /* FORZAR BOTONES MINIATURA EN IDENTIFICADOR */
-    [data-testid="column"] {
-        display: flex;
-        justify-content: center;
+    /* Estilo para los botones tipo Piano/Grid */
+    .nota-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin-bottom: 20px;
     }
-    [data-testid="column"] button {
-        width: 100% !important;
-        padding: 0px !important;
-        height: 28px !important;
-        min-height: 28px !important;
-        max-height: 28px !important;
-        font-size: 11px !important;
-        line-height: 28px !important;
-        margin: 0px !important;
-    }
-    /* Quitar espacio excesivo de Streamlit en móviles */
-    .stMainBlockContainer {
-        padding-top: 1rem !important;
-        padding-bottom: 1rem !important;
+    .nota-btn {
+        padding: 10px;
+        text-align: center;
+        border: 1px solid #dcdfe3;
+        border-radius: 5px;
+        cursor: pointer;
+        background-color: transparent;
+        font-weight: bold;
+        transition: 0.2s;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -60,7 +57,7 @@ def toggle_nota(nota):
     if nota in st.session_state.notas_inversas: st.session_state.notas_inversas.remove(nota)
     else: st.session_state.notas_inversas.add(nota)
 
-# Clase PDF (Mismo código anterior)
+# Clase PDF (Mantenemos igual)
 class PDF_Final(FPDF):
     def footer(self):
         self.set_y(-15)
@@ -103,7 +100,6 @@ def generar_pdf(dataframe_seleccionado):
 
 df = load()
 if df is not None:
-    # ORDEN MUSICAL ESTRICTO
     notas_musicales = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B']
     orden_tipos = ["MAYOR", "MENOR", "DOMINANTE", "AUMENTADO", "DISMINUIDO", "SEMIDISMINUIDO", "MAJ7", "MENOR7"]
     
@@ -127,19 +123,20 @@ if df is not None:
         
         else:
             st.header("🔍 Identificador")
-            # Botonera 3 columnas, botones forzados a ser bajos
-            for i in range(0, len(notas_musicales), 3):
-                cols = st.columns(3)
-                for j in range(3):
-                    if i + j < len(notas_musicales):
-                        nota = notas_musicales[i + j]
-                        activo = nota in st.session_state.notas_inversas
-                        tipo_btn = "primary" if activo else "secondary"
-                        if cols[j].button(nota, key=f"inv_{nota}", use_container_width=True, type=tipo_btn):
-                            toggle_nota(nota)
-                            st.rerun()
+            st.write("Selecciona notas:")
             
-            if st.button("Borrar Notas", use_container_width=True):
+            # BOTONERA CORREGIDA: Usamos columnas de Streamlit pero sin forzar CSS roto
+            # Para que en celular se vea bien, usaremos columnas más anchas
+            cols = st.columns(3)
+            for i, nota in enumerate(notas_musicales):
+                # Determinamos si la nota está activa
+                activo = nota in st.session_state.notas_inversas
+                if cols[i % 3].button(nota, key=f"inv_{nota}", use_container_width=True, type="primary" if activo else "secondary"):
+                    toggle_nota(nota)
+                    st.rerun()
+            
+            st.write("---")
+            if st.button("Resetear notas", use_container_width=True):
                 st.session_state.notas_inversas = set()
                 st.rerun()
 
@@ -168,11 +165,11 @@ if df is not None:
                                 h_items += f'<div style="flex:0 0 auto; text-align:center;"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
                         st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
             
-            if st.button("📥 Descargar PDF"):
+            if st.button("📥 Generar PDF"):
                 pdf_bytes = generar_pdf(df_raiz[df_raiz['Naturaleza'].isin(st.session_state.seleccionados)])
-                st.download_button("Click aquí", data=bytes(pdf_bytes), file_name=f"Acordes_{raiz_sel}.pdf")
+                st.download_button("Descargar", data=bytes(pdf_bytes), file_name=f"Acordes_{raiz_sel}.pdf")
 
-    else: # IDENTIFICADOR
+    else: # MODO IDENTIFICADOR
         seleccion = st.session_state.notas_inversas
         if seleccion:
             st.write(f"**Notas:** {' - '.join(sorted(list(seleccion)))}")
@@ -193,4 +190,4 @@ if df is not None:
                                 url = f"{GITHUB_BASE}/{str(row['Naturaleza']).replace(' ', '%20')}/{v.split('/')[-1]}"
                                 h_items += f'<div style="flex:0 0 auto; text-align:center;"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
                         st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
-            else: st.warning("No hay coincidencias exactas.")
+            else: st.warning("No hay coincidencias.")
