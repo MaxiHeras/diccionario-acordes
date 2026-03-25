@@ -8,7 +8,7 @@ import urllib.parse
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
-# CSS - GRILLA DE 3 EN CELULAR Y ESTILOS LIMPIOS
+# CSS - MEJORAS DE DISEÑO Y COMPARTIR
 st.markdown("""
     <style>
     @media (prefers-color-scheme: dark) { .chord-img-web { filter: invert(1) hue-rotate(180deg); } }
@@ -21,7 +21,20 @@ st.markdown("""
 
     .stButton > button { width: 100% !important; padding: 5px 2px !important; font-size: 13px !important; min-height: 40px !important; border-radius: 8px !important; }
     
-    .app-link { background-color: #f0f2f6; padding: 10px; border-radius: 10px; border: 1px dashed #ff4b4b; text-align: center; font-size: 14px; margin-bottom: 10px; }
+    /* Estilo del link interactivo */
+    .copy-link {
+        background-color: #f0f2f6;
+        padding: 8px;
+        border-radius: 5px;
+        border: 1px solid #ff4b4b;
+        color: #ff4b4b;
+        text-align: center;
+        font-family: monospace;
+        cursor: pointer;
+        font-size: 12px;
+        display: block;
+        text-decoration: none;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -47,7 +60,7 @@ def toggle_nota(nota):
     if nota in st.session_state.notas_inversas: st.session_state.notas_inversas.remove(nota)
     else: st.session_state.notas_inversas.add(nota)
 
-# 3. PDF ENGINE
+# 3. MOTOR PDF
 class PDF_Final(FPDF):
     def footer(self):
         self.set_y(-15)
@@ -99,19 +112,22 @@ if df is not None:
             
             if "ultima_raiz_control" not in st.session_state or st.session_state.ultima_raiz_control != raiz_sel:
                 st.session_state.ultima_raiz_control = raiz_sel
-                st.session_state.seleccionados = opciones # Selecciona todos por defecto
+                st.session_state.seleccionados = opciones
             
             st.multiselect("Tipo:", opciones, key="seleccionados")
             c1, c2 = st.columns(2)
             c1.button("Todo", on_click=seleccionar_todo, args=(opciones,), use_container_width=True)
             c2.button("Limpiar", on_click=limpiar_todo, use_container_width=True)
             
+            # --- COMPARTIR RE-ORDENADO ---
             st.write("---")
             st.write("📲 **Compartir App**")
-            st.markdown(f'<div class="app-link"><code>{APP_URL}</code></div>', unsafe_allow_html=True)
-            # QR usando API externa para evitar el error de librerías
             qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={urllib.parse.quote(APP_URL)}"
-            st.image(qr_url, caption="Escaneá para abrir")
+            st.image(qr_url, caption="Escaneá para abrir", use_container_width=True)
+            
+            # Link para copiar debajo del QR
+            st.write("Toca para copiar link:")
+            st.code(APP_URL, language=None)
         
         else:
             st.header("🔍 Identificador")
@@ -126,9 +142,17 @@ if df is not None:
             if st.button("Resetear notas", use_container_width=True):
                 st.session_state.notas_inversas = set(); st.rerun()
 
-    # --- RENDERIZADO ---
+    # --- PANTALLA PRINCIPAL ---
     if modo == "Diccionario 📖":
         if st.session_state.seleccionados:
+            # Botón de PDF al principio para fácil acceso
+            pdf_btn_col1, _ = st.columns([1, 2])
+            if pdf_btn_col1.button("📥 Generar PDF de esta selección"):
+                pdf_bytes = generar_pdf(df_raiz[df_raiz['Naturaleza'].isin(st.session_state.seleccionados)])
+                st.download_button("Click aquí para descargar archivo", data=bytes(pdf_bytes), file_name=f"Acordes_{raiz_sel}.pdf")
+            
+            st.write("---")
+            
             tabs_ordenados = [t for t in orden_tipos if t in st.session_state.seleccionados]
             tabs = st.tabs(tabs_ordenados)
             for i, tab in enumerate(tabs):
@@ -146,11 +170,6 @@ if df is not None:
                             url = f"{GITHUB_BASE}/{str(row['Naturaleza']).replace(' ', '%20')}/{v.split('/')[-1]}"
                             h_items += f'<div style="flex:0 0 auto; text-align:center;"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
                     st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
-            
-            st.write("---")
-            if st.button("📥 Generar PDF"):
-                pdf_bytes = generar_pdf(df_raiz[df_raiz['Naturaleza'].isin(st.session_state.seleccionados)])
-                st.download_button("Descargar PDF", data=bytes(pdf_bytes), file_name=f"Diccionario_{raiz_sel}.pdf")
 
     elif modo == "Identificador 🔍":
         seleccion = st.session_state.notas_inversas
