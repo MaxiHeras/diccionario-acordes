@@ -20,12 +20,10 @@ URL_QR = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={APP_UR
 @st.cache_data
 def load():
     try:
-        # Añadimos un timeout y manejo de errores más limpio
         df = pd.read_csv(URL_EXCEL)
         df.columns = [str(c).strip() for c in df.columns]
         return df
-    except Exception as e:
-        return None
+    except: return None
 
 df = load()
 
@@ -52,15 +50,14 @@ if df is not None:
         
         for idx, row in df_f.iterrows():
             with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=esta_expandido):
-                # NOTAS (N1 a N4)
-                notas = [str(row[c]).strip() for c in ['N1','N2','N3','N4'] if c in row and pd.notna(row[c]) and str(row[c]).lower() not in ['nan','','0']]
+                # NOTAS
+                notas = [str(row[c]).strip() for c in ['N1','N2','N3','N4'] if pd.notna(row.get(c)) and str(row[c]).lower() not in ['nan','','0']]
                 st.write(f"**Notas:** {' - '.join(notas)}")
                 
                 # INTERVALOS
                 col1, col2 = st.columns(2)
                 ivan = str(row.get('Int_IVAN', '')).strip()
                 trad = str(row.get('Int_TRAD', '')).strip()
-                
                 if ivan and ivan.lower() not in ['nan', '0', '']:
                     col1.info(f"**Int_IVAN:**\n\n{ivan}")
                 if trad and trad.lower() not in ['nan', '0', '']:
@@ -73,11 +70,10 @@ if df is not None:
                 GITHUB_BASE = "https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main"
                 
                 for i in range(1, 10):
-                    col_diag = f'Diagrama{i}'
-                    val = str(row.get(col_diag, 'nan')).strip()
+                    val = str(row.get(f'Diagrama{i}', 'nan')).strip()
                     if val.lower().endswith('.png'):
                         nombre_archivo = val.split('/')[-1]
-                        # Codificamos la URL por si Naturaleza tiene espacios
+                        # El replace corrige problemas con espacios en los nombres de carpetas
                         url_img = f"{GITHUB_BASE}/{row['Naturaleza'].replace(' ', '%20')}/{nombre_archivo}"
                         div_id = f"pos_{idx}_{i}"
                         h_items += f'<div class="chord-item" id="{div_id}"><img src="{url_img}" class="chord-img" width="110"><p style="font-size:12px;color:gray;">P{i}</p></div>'
@@ -89,4 +85,4 @@ if df is not None:
     else:
         st.info("Elegí un acorde en el menú lateral para empezar.")
 else:
-    st.error("Error al cargar la base de datos desde Google Sheets.")
+    st.error("Error al cargar el Excel.")
