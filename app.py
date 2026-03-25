@@ -29,7 +29,7 @@ def load():
         return df
     except: return None
 
-# --- FUNCIÓN PDF (CALIBRADA) ---
+# --- FUNCIÓN PDF (AJUSTE DE COLOR, FUENTE Y ESPACIADO) ---
 def generar_pdf(dataframe_seleccionado):
     pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.set_auto_page_break(auto=True, margin=15)
@@ -37,36 +37,39 @@ def generar_pdf(dataframe_seleccionado):
     for _, row in dataframe_seleccionado.iterrows():
         pdf.add_page()
         
-        # TÍTULO CON RECUADRO
+        # TÍTULO EN NEGRO (0, 0, 0)
         pdf.set_font("Helvetica", "B", 24)
+        pdf.set_text_color(0, 0, 0) 
         pdf.cell(0, 20, f"{row['Raiz']} {row['Naturaleza']}", border=1, ln=True, align='C')
         
-        pdf.ln(12) # Espacio después del recuadro
+        pdf.ln(12) 
         
-        # TEXTOS (Notas e Intervalos con espaciado uniforme)
-        pdf.set_font("Helvetica", "B", 12)
+        # TEXTOS MÁS CHICOS (Reducidos 2 puntos)
+        # Notas: antes 12 -> ahora 10
+        pdf.set_font("Helvetica", "B", 10)
         pdf.set_text_color(60, 60, 60)
-        
         notas = [str(row[c]).strip() for c in ['N1','N2','N3','N4'] if c in row and pd.notna(row[c]) and str(row[c]).lower() not in ['nan','','0']]
-        pdf.cell(0, 6, f"Notas: {' - '.join(notas)}", ln=True) # Alto de celda 6
+        pdf.cell(0, 5, f"Notas: {' - '.join(notas)}", ln=True) 
         
+        # Intervalos: antes 10 -> ahora 8
+        pdf.set_font("Helvetica", "B", 8)
         ivan = str(row.get('Int_IVAN', 'N/A'))
-        pdf.cell(0, 6, f"Intervalos IVAN: {ivan}", ln=True) # Alto de celda 6
+        pdf.cell(0, 5, f"Intervalos IVAN: {ivan}", ln=True) 
         
         trad = str(row.get('Int_TRAD', 'N/A'))
-        pdf.cell(0, 6, f"Intervalos TRAD: {trad}", ln=True) # Alto de celda 6
+        pdf.cell(0, 5, f"Intervalos TRAD: {trad}", ln=True) 
         
-        # ESPACIO BASE (Distancia TRAD -> Gráficos)
-        pdf.ln(10) 
+        # ESPACIO MÁS AMPLIO HACIA DIAGRAMAS (Aumentado de 10 a 15)
+        pdf.ln(15) 
 
         # CUADRÍCULA DE DIAGRAMAS
         X_START = 15
         GAP_X = 5
-        GAP_Y = 10     # Este es el espacio TRAD -> Gráficos replicado aquí
+        GAP_Y = 15     
         COLS = 4
         DIAG_WIDTH = 38
         DIAG_HEIGHT = 45
-        TEXT_Px_HEIGHT = 5 # Altura reservada para el "P1"
+        TEXT_Px_HEIGHT = 5 
         
         y_inicial_bloque = pdf.get_y()
         count = 0
@@ -85,23 +88,18 @@ def generar_pdf(dataframe_seleccionado):
                     col = count % COLS
                     fila = count // COLS
                     
-                    # Si cambiamos de fila, calculamos la nueva Y
-                    # Incluye: Alto imagen + Espacio para Px + Gap replicado
                     if col == 0 and fila > 0:
                         y_inicial_bloque += (DIAG_HEIGHT + TEXT_Px_HEIGHT + GAP_Y)
                     
                     pos_x = X_START + (col * (DIAG_WIDTH + GAP_X))
                     
-                    # Salto de página
                     if y_inicial_bloque + DIAG_HEIGHT + 10 > 282: 
                         pdf.add_page()
                         y_inicial_bloque = 20
                         pos_x = X_START + (col * (DIAG_WIDTH + GAP_X))
                     
-                    # Imagen
                     pdf.image(img_buffer, x=pos_x, y=y_inicial_bloque, w=DIAG_WIDTH, h=DIAG_HEIGHT)
                     
-                    # Texto Px (justo debajo de la imagen)
                     pdf.set_xy(pos_x, y_inicial_bloque + DIAG_HEIGHT + 1)
                     pdf.set_font("Helvetica", "", 9)
                     pdf.set_text_color(128, 128, 128)
@@ -150,7 +148,7 @@ if df is not None:
             df_export = df_export.sort_values('Naturaleza')
 
             if st.button("📥 Generar PDF", use_container_width=True):
-                with st.spinner("Sincronizando diagramas..."):
+                with st.spinner("Ajustando diseño..."):
                     try:
                         pdf_bytes = generar_pdf(df_export)
                         st.download_button(label="🔥 Descargar archivo PDF", data=bytes(pdf_bytes), file_name=f"Acordes_{raiz_sel}.pdf", mime="application/pdf", use_container_width=True)
