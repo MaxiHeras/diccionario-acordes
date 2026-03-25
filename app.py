@@ -3,12 +3,12 @@ import pandas as pd
 import requests
 from fpdf import FPDF
 from io import BytesIO
-import qrcode
+import urllib.parse
 
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
-# CSS - MANTIENE LA GRILLA DE 3 EN CELULAR Y ESTILOS DE COMPARTIR
+# CSS - GRILLA DE 3 EN CELULAR Y ESTILOS LIMPIOS
 st.markdown("""
     <style>
     @media (prefers-color-scheme: dark) { .chord-img-web { filter: invert(1) hue-rotate(180deg); } }
@@ -21,12 +21,11 @@ st.markdown("""
 
     .stButton > button { width: 100% !important; padding: 5px 2px !important; font-size: 13px !important; min-height: 40px !important; border-radius: 8px !important; }
     
-    /* Estilo para el link de la App */
-    .app-link { background-color: #f0f2f6; padding: 10px; border-radius: 10px; border: 1px dashed #ff4b4b; text-align: center; font-size: 14px; }
+    .app-link { background-color: #f0f2f6; padding: 10px; border-radius: 10px; border: 1px dashed #ff4b4b; text-align: center; font-size: 14px; margin-bottom: 10px; }
     </style>
 """, unsafe_allow_html=True)
 
-# 2. CARGA DE DATOS Y CONSTANTES
+# 2. CARGA DE DATOS
 APP_URL = "https://diccionario-acordes-xz99pzx875gw2ytzpqacv.streamlit.app/"
 URL_EXCEL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
 GITHUB_BASE = "https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main"
@@ -48,7 +47,7 @@ def toggle_nota(nota):
     if nota in st.session_state.notas_inversas: st.session_state.notas_inversas.remove(nota)
     else: st.session_state.notas_inversas.add(nota)
 
-# 3. CLASE PDF
+# 3. PDF ENGINE
 class PDF_Final(FPDF):
     def footer(self):
         self.set_y(-15)
@@ -67,8 +66,7 @@ def generar_pdf(dataframe_seleccionado):
         notas_str = [str(row.get(n,'')) for n in ['N1','N2','N3','N4'] if pd.notna(row.get(n))]
         pdf.set_font("helvetica", "B", 11)
         pdf.write(5, f"Notas: {' - '.join(notas_str)}\n")
-        pdf.write(5, f"Intervalos IVAN: {str(row.get('Int_IVAN', 'N/A'))}\n")
-        pdf.write(5, f"Intervalos TRAD: {str(row.get('Int_TRAD', 'N/A'))}\n")
+        pdf.write(5, f"IVAN: {str(row.get('Int_IVAN', 'N/A'))} | TRAD: {str(row.get('Int_TRAD', 'N/A'))}\n")
         pdf.ln(10)
         X_START, GAP_X, COLS, DIAG_W, DIAG_H = 15, 5, 4, 38, 45
         y_curr, count = pdf.get_y(), 0
@@ -81,9 +79,6 @@ def generar_pdf(dataframe_seleccionado):
                     col, fila = count % COLS, count // COLS
                     pos_x, pos_y = X_START + (col * (DIAG_W + GAP_X)), y_curr + (fila * (DIAG_H + 10))
                     pdf.image(BytesIO(img_data), x=pos_x, y=pos_y, w=DIAG_W, h=DIAG_H)
-                    pdf.set_xy(pos_x, pos_y + DIAG_H + 1)
-                    pdf.set_font("helvetica", "", 9)
-                    pdf.cell(DIAG_W, 5, f"P{i}", align='C')
                     count += 1
                 except: continue
     return pdf.output()
@@ -102,25 +97,21 @@ if df is not None:
             df_raiz = df[df['Raiz'] == raiz_sel]
             opciones = [t for t in orden_tipos if t in df_raiz['Naturaleza'].unique()]
             
-            # SELECCIÓN AUTOMÁTICA TOTAL AL CAMBIAR RAÍZ
             if "ultima_raiz_control" not in st.session_state or st.session_state.ultima_raiz_control != raiz_sel:
                 st.session_state.ultima_raiz_control = raiz_sel
-                st.session_state.seleccionados = opciones
+                st.session_state.seleccionados = opciones # Selecciona todos por defecto
             
             st.multiselect("Tipo:", opciones, key="seleccionados")
             c1, c2 = st.columns(2)
             c1.button("Todo", on_click=seleccionar_todo, args=(opciones,), use_container_width=True)
             c2.button("Limpiar", on_click=limpiar_todo, use_container_width=True)
             
-            # --- SECCIÓN DE COMPARTIR ---
             st.write("---")
             st.write("📲 **Compartir App**")
             st.markdown(f'<div class="app-link"><code>{APP_URL}</code></div>', unsafe_allow_html=True)
-            
-            qr = qrcode.make(APP_URL)
-            buf = BytesIO()
-            qr.save(buf, format="PNG")
-            st.image(buf, caption="Escaneame para abrir", use_container_width=True)
+            # QR usando API externa para evitar el error de librerías
+            qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={urllib.parse.quote(APP_URL)}"
+            st.image(qr_url, caption="Escaneá para abrir")
         
         else:
             st.header("🔍 Identificador")
@@ -131,15 +122,11 @@ if df is not None:
                         n = notas_musicales[i + j]
                         activo = n in st.session_state.notas_inversas
                         if cols[j].button(n, key=f"inv_{n}", type="primary" if activo else "secondary"):
-                            toggle_nota(n)
-                            st.rerun()
-            
-            st.write("---")
+                            toggle_nota(n); st.rerun()
             if st.button("Resetear notas", use_container_width=True):
-                st.session_state.notas_inversas = set()
-                st.rerun()
+                st.session_state.notas_inversas = set(); st.rerun()
 
-    # --- VISUALIZACIÓN ---
+    # --- RENDERIZADO ---
     if modo == "Diccionario 📖":
         if st.session_state.seleccionados:
             tabs_ordenados = [t for t in orden_tipos if t in st.session_state.seleccionados]
@@ -147,35 +134,29 @@ if df is not None:
             for i, tab in enumerate(tabs):
                 with tab:
                     tipo_actual = tabs_ordenados[i]
-                    res_filtro = df_raiz[df_raiz['Naturaleza'] == tipo_actual]
-                    if not res_filtro.empty:
-                        row = res_filtro.iloc[0]
-                        st.markdown(f"### {row['Raiz']} {row['Naturaleza']}")
-                        lista_n = [str(row.get(n,'')) for n in ['N1','N2','N3','N4'] if pd.notna(row.get(n))]
-                        st.write(f"**Notas:** {' - '.join(lista_n)}")
-                        st.write(f"**IVAN:** {row.get('Int_IVAN','')} | **TRAD:** {row.get('Int_TRAD','')}")
-                        h_items = ""
-                        for j in range(1, 10):
-                            v = str(row.get(f'Diagrama{j}', 'nan'))
-                            if v.lower().endswith('.png'):
-                                url = f"{GITHUB_BASE}/{str(row['Naturaleza']).replace(' ', '%20')}/{v.split('/')[-1]}"
-                                h_items += f'<div style="flex:0 0 auto; text-align:center;"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
-                        st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
+                    row = df_raiz[df_raiz['Naturaleza'] == tipo_actual].iloc[0]
+                    st.markdown(f"### {row['Raiz']} {row['Naturaleza']}")
+                    lista_n = [str(row.get(n,'')) for n in ['N1','N2','N3','N4'] if pd.notna(row.get(n))]
+                    st.write(f"**Notas:** {' - '.join(lista_n)}")
+                    st.write(f"**IVAN:** {row.get('Int_IVAN','')} | **TRAD:** {row.get('Int_TRAD','')}")
+                    h_items = ""
+                    for j in range(1, 10):
+                        v = str(row.get(f'Diagrama{j}', 'nan'))
+                        if v.lower().endswith('.png'):
+                            url = f"{GITHUB_BASE}/{str(row['Naturaleza']).replace(' ', '%20')}/{v.split('/')[-1]}"
+                            h_items += f'<div style="flex:0 0 auto; text-align:center;"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
+                    st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
             
-            # --- GENERAR PDF ABAJO DE LOS RESULTADOS ---
             st.write("---")
-            if st.button("📥 Generar PDF de selección"):
+            if st.button("📥 Generar PDF"):
                 pdf_bytes = generar_pdf(df_raiz[df_raiz['Naturaleza'].isin(st.session_state.seleccionados)])
-                st.download_button("Descargar PDF ahora", data=bytes(pdf_bytes), file_name=f"Diccionario_{raiz_sel}.pdf")
+                st.download_button("Descargar PDF", data=bytes(pdf_bytes), file_name=f"Diccionario_{raiz_sel}.pdf")
 
-    else: # MODO IDENTIFICADOR
+    elif modo == "Identificador 🔍":
         seleccion = st.session_state.notas_inversas
         if seleccion:
             st.write(f"**Notas:** {' - '.join(sorted(list(seleccion)))}")
-            def coincide(row):
-                notas_row = {str(row[n]) for n in ['N1', 'N2', 'N3', 'N4'] if pd.notna(row[n])}
-                return seleccion == notas_row
-            res = df[df.apply(coincide, axis=1)]
+            res = df[df.apply(lambda r: seleccion == {str(r[n]) for n in ['N1','N2','N3','N4'] if pd.notna(r[n])}, axis=1)]
             if not res.empty:
                 for _, row in res.iterrows():
                     with st.expander(f"✅ {row['Raiz']} {row['Naturaleza']}", expanded=True):
