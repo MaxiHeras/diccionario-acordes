@@ -4,12 +4,11 @@ import requests
 from fpdf import FPDF
 from io import BytesIO
 import urllib.parse
-import time
 
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
-# CSS: OPTIMIZACIÓN DE VELOCIDAD Y DISEÑO
+# CSS: ULTRA-VELOCIDAD EN BOTONES Y DISEÑO MÓVIL
 st.markdown("""
     <style>
     @media (prefers-color-scheme: dark) { .chord-img-web { filter: invert(1) hue-rotate(180deg); } }
@@ -29,17 +28,22 @@ st.markdown("""
         min-width: 31% !important;
     }
 
-    /* ANIMACIÓN INSTANTÁNEA: Eliminamos transiciones para que el feedback sea inmediato */
+    /* ANIMACIÓN ULTRA-RÁPIDA */
     .stButton > button {
         width: 100% !important;
         padding: 5px 2px !important;
         font-size: 13px !important;
         min-height: 42px !important;
         border-radius: 6px !important;
-        transition: none !important; /* Elimina el retraso de color */
+        /* ELIMINAMOS TODA TRANSICIÓN PARA PINTADO INSTANTÁNEO */
+        transition: none !important; 
+        animation: none !important;
     }
+    
+    /* Efecto de presión inmediata */
     .stButton > button:active {
-        transform: scale(0.95); /* Feedback táctil rápido */
+        transform: scale(0.98) !important;
+        border-color: #ff4b4b !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -110,7 +114,7 @@ if df is not None:
     orden_tipos = ["MAYOR", "MENOR", "DOMINANTE", "AUMENTADO", "DISMINUIDO", "SEMIDISMINUIDO", "MAJ7", "MENOR7"]
     
     with st.sidebar:
-        modo = st.radio("Modo:", ["Diccionario 📖", "Buscador 🔍"])
+        modo = st.radio("Modo:", ["Diccionario 📖", "Identificador 🔍"])
         st.write("---")
 
         if modo == "Diccionario 📖":
@@ -128,16 +132,13 @@ if df is not None:
             c2.button("Limpiar", on_click=limpiar_todo, use_container_width=True)
             
             st.write("")
-            # ANIMACIÓN DE CARGA PARA EL PDF
             if st.button("📥 Generar PDF de Selección", use_container_width=True):
                 df_para_pdf = df_raiz[df_raiz['Naturaleza'].isin(st.session_state.seleccionados)]
                 if not df_para_pdf.empty:
-                    with st.status("Generando archivo...", expanded=False) as status:
+                    with st.status("Preparando PDF...", expanded=False) as s:
                         pdf_bytes = generar_pdf(df_para_pdf)
-                        status.update(label="¡PDF Listo!", state="complete", expanded=False)
-                    st.download_button("💾 Guardar Acordes", data=bytes(pdf_bytes), file_name=f"Acordes_{raiz_sel}.pdf", use_container_width=True)
-                else:
-                    st.warning("Seleccioná acordes primero.")
+                        s.update(label="¡Listo!", state="complete")
+                    st.download_button("💾 Descargar Archivo", data=bytes(pdf_bytes), file_name=f"Acordes_{raiz_sel}.pdf", use_container_width=True)
 
             st.write("---")
             st.write("📲 **Compartir App**")
@@ -146,14 +147,14 @@ if df is not None:
             st.code(APP_URL, language=None)
         
         else:
-            st.header("🔍 Buscador")
+            st.header("🔍 Identificador")
             for i in range(0, len(notas_musicales), 3):
                 cols = st.columns(3)
                 for j in range(3):
                     if i + j < len(notas_musicales):
                         n = notas_musicales[i + j]
                         is_active = n in st.session_state.notas_inversas
-                        if cols[j].button(n, key=f"btn_{n}", type="primary" if is_active else "secondary"):
+                        if cols[j].button(n, key=f"id_{n}", type="primary" if is_active else "secondary"):
                             toggle_nota(n)
                             st.rerun()
 
@@ -162,7 +163,7 @@ if df is not None:
                 st.session_state.notas_inversas = set()
                 st.rerun()
 
-    # --- RENDERIZADO PRINCIPAL ---
+    # --- PANTALLA PRINCIPAL ---
     if modo == "Diccionario 📖":
         if st.session_state.seleccionados:
             tabs_ordenados = [t for t in orden_tipos if t in st.session_state.seleccionados]
@@ -175,7 +176,6 @@ if df is not None:
                     lista_n = [str(row.get(n,'')) for n in ['N1','N2','N3','N4'] if pd.notna(row.get(n))]
                     st.write(f"**Notas:** {' - '.join(lista_n)}")
                     st.info(f"**IVAN:** {row.get('Int_IVAN','')} | **TRAD:** {row.get('Int_TRAD','')}")
-                    
                     h_items = ""
                     for j in range(1, 10):
                         v = str(row.get(f'Diagrama{j}', 'nan'))
@@ -184,12 +184,11 @@ if df is not None:
                             h_items += f'<div style="flex:0 0 auto; text-align:center;"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
                     st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
 
-    else: # MODO BUSCADOR
+    else: # MODO IDENTIFICADOR
         seleccion = st.session_state.notas_inversas
         if seleccion:
-            st.subheader(f"Notas: {' - '.join(sorted(list(seleccion)))}")
+            st.subheader(f"Buscando: {' - '.join(sorted(list(seleccion)))}")
             res = df[df.apply(lambda r: seleccion == {str(r[n]) for n in ['N1','N2','N3','N4'] if pd.notna(r[n])}, axis=1)]
-            
             if not res.empty:
                 for _, row in res.iterrows():
                     with st.expander(f"✅ {row['Raiz']} {row['Naturaleza']}", expanded=True):
@@ -202,4 +201,4 @@ if df is not None:
                                 h_items += f'<div style="flex:0 0 auto; text-align:center;"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
                         st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
             else:
-                st.warning("No hay coincidencias.")
+                st.warning("Sin coincidencias.")
