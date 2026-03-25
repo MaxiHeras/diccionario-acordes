@@ -29,34 +29,66 @@ def load():
         return df
     except: return None
 
-# --- FUNCIÓN PARA GENERAR PDF ---
+# --- FUNCIÓN PARA GENERAR PDF (REVISADA PARA ESPACIADO) ---
 def generar_pdf(dataframe_seleccionado):
-    pdf = FPDF()
+    # Usamos A4 normal para que sea fácil de imprimir
+    pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.set_auto_page_break(auto=True, margin=15)
+    
+    # Fuentes estándar
+    pdf.add_font("Helvetica_Bold", "", "Helvetica-Bold.ttf", uni=True)
     
     for _, row in dataframe_seleccionado.iterrows():
         pdf.add_page()
-        # Título
-        pdf.set_font("Helvetica", "B", 22)
-        pdf.set_text_color(40, 40, 40)
-        pdf.cell(0, 15, f"{row['Raiz']} {row['Naturaleza']}", ln=True, align='C')
+        
+        # Título del Acorde (más grande)
+        pdf.set_font("Helvetica", "B", 26)
+        pdf.set_text_color(20, 20, 20)
+        pdf.cell(0, 20, f"{row['Raiz']} {row['Naturaleza']}", ln=True, align='C')
+        
+        # Separación
+        pdf.ln(5)
         
         # Notas
-        pdf.set_font("Helvetica", "B", 12)
+        pdf.set_font("Helvetica", "B", 14)
+        pdf.set_text_color(60, 60, 60)
         notas = [str(row[c]).strip() for c in ['N1','N2','N3','N4'] if c in row and pd.notna(row[c]) and str(row[c]).lower() not in ['nan','','0']]
         pdf.cell(0, 10, f"Notas: {' - '.join(notas)}", ln=True)
         
-        # Intervalos
-        pdf.set_font("Helvetica", "", 10)
-        ivan = str(row.get('Int_IVAN', 'N/A'))
-        trad = str(row.get('Int_TRAD', 'N/A'))
-        pdf.multi_cell(0, 5, f"Intervalos IVAN: {ivan}\nIntervalos TRAD: {trad}")
-        pdf.ln(5)
+        # Intervalos (en dos líneas)
+        pdf.set_font("Helvetica", "", 11)
+        pdf.set_text_color(80, 80, 80)
+        ivan = str(row.get('Int_IVAN', 'N/A')).replace('\n', ' - ')
+        trad = str(row.get('Int_TRAD', 'N/A')).replace('\n', ' - ')
+        
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.cell(35, 7, "Intervalos IVAN:", ln=0)
+        pdf.set_font("Helvetica", "", 11)
+        pdf.cell(0, 7, ivan, ln=True)
+        
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.cell(35, 7, "Intervalos TRAD:", ln=0)
+        pdf.set_font("Helvetica", "", 11)
+        pdf.cell(0, 7, trad, ln=True)
+        
+        # Separación antes de diagramas
+        pdf.ln(15)
 
-        # Diagramas
-        x_start = 10
-        y_curr = pdf.get_y()
+        # --- LÓGICA DE DIAGRAMAS ---
+        # Definiciones de cuadrícula y tamaño (mm)
+        X_START = 15          # Margen izquierdo
+        Y_DIAG_START = pdf.get_y() # Donde empiezan los diagramas
+        DIAG_WIDTH = 45        # Un 15% más chicos que antes (era 55)
+        GAP_X = 5              # Espacio lateral entre diagramas
+        GAP_Y = 10             # Espacio vertical fijo (NUNCA se superpondrán)
+        COLS = 4               # 4 por fila para tener más espacio
+        
+        # Alto estimado de un diagrama (aproximadamente, fpdf no lo sabe hasta ponerlo, 
+        # pero para guitarras estándar de tu repositorio esto anda bien)
+        EST_DIAG_HEIGHT = 60 # Espacio vertical total que ocupa (imagen + GAP_Y)
+        
         count = 0
+        current_y_row = Y_DIAG_START # Usamos esto para controlar la fila actual
         
         for i in range(1, 10):
             val = str(row.get(f'Diagrama{i}', 'nan')).strip()
@@ -66,27 +98,33 @@ def generar_pdf(dataframe_seleccionado):
                 url_img = f"{GITHUB_BASE}/{nat_url}/{nombre_archivo}"
                 
                 try:
-                    # Descargamos la imagen
+                    # Descargamos la imagen (con timeout por si acaso)
                     img_data = requests.get(url_img, timeout=5).content
                     img_buffer = BytesIO(img_data)
                     
-                    # 3 imágenes por fila
-                    col = count % 3
-                    fila = count // 3
+                    # Calcular posición en la cuadrícula
+                    col = count % COLS
+                    fila = count // COLS
                     
-                    # Ajuste de posición (ancho 60mm por imagen)
-                    pos_x = x_start + (col * 65)
-                    pos_y = y_curr + (fila * 60)
+                    # Calcular X e Y absolutos
+                    pos_x = X_START + (col * (DIAG_WIDTH + GAP_X))
                     
-                    # Si nos pasamos del alto de página, saltar (fpdf lo hace pero esto ayuda al layout)
-                    if pos_y > 230: 
+                    # Si cambiamos de fila, actualizamos la Y base
+                    if col == 0 and fila > 0:
+                        current_y_row += EST_DIAG_HEIGHT
+                    
+                    # Salto de página de emergencia si nos vamos muy abajo
+                    if current_y_row + EST_DIAG_HEIGHT > 270: 
                         pdf.add_page()
-                        y_curr = 20
-                        pos_y = y_curr
+                        current_y_row = 20 # Reseteamos Y en la nueva página
                     
-                    pdf.image(img_buffer, x=pos_x, y=pos_y, w=55)
+                    # Ponemos la imagen
+                    # FPDF calcula la altura automáticamente para mantener proporción si no damos 'h'
+                    pdf.image(img_buffer, x=pos_x, y=current_y_row, w=DIAG_WIDTH)
+                    
                     count += 1
                 except:
+                    # Si una URL falla, saltamos esa imagen y seguimos
                     continue
                     
     return pdf.output()
@@ -136,12 +174,13 @@ if df is not None:
         if nat_sel:
             # Preparamos los datos
             df_export = df_raiz[df_raiz['Naturaleza'].isin(nat_sel)].copy()
+            # Aseguramos el orden correcto de los acordes en el PDF
             df_export['Naturaleza'] = pd.Categorical(df_export['Naturaleza'], categories=opciones_finales, ordered=True)
             df_export = df_export.sort_values('Naturaleza')
 
-            # Botón para generar
+            # Botón para generar (esto evita errores de Streamlit)
             if st.button("📥 Generar PDF", use_container_width=True):
-                with st.spinner("Descargando diagramas y armando PDF..."):
+                with st.spinner("Descargando diagramas y armando PDF... (esto puede tardar)"):
                     try:
                         pdf_output = generar_pdf(df_export)
                         st.download_button(
@@ -157,7 +196,7 @@ if df is not None:
         st.write("---")
         st.image(URL_QR, caption="Escanear para compartir", width=180)
 
-    # 4. RESULTADOS VISUALES
+    # 4. RESULTADOS VISUALES (App web, sin cambios)
     if nat_sel:
         df_f = df_raiz[df_raiz['Naturaleza'].isin(nat_sel)].copy()
         df_f['Naturaleza'] = pd.Categorical(df_f['Naturaleza'], categories=opciones_finales, ordered=True)
