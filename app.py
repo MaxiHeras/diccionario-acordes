@@ -25,7 +25,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 2. CARGA DE DATOS (URL Principal)
+# 2. CARGA DE DATOS
 APP_URL = "https://diccionario-acordes-xz99pzx875gw2ytzpqxacv.streamlit.app/"
 URL_EXCEL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
 URL_QR = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={APP_URL}"
@@ -62,6 +62,7 @@ def generar_pdf(dataframe_seleccionado):
         pdf.ln(8) 
         pdf.set_font("helvetica", "B", 11)
         pdf.set_text_color(60, 60, 60)
+        # Notas en PDF ya usaban guion, mantenemos consistencia
         notas = [str(row.get(n,'')) for n in ['N1','N2','N3','N4'] if pd.notna(row.get(n))]
         pdf.write(5, f"Notas: {' - '.join(notas)}\n")
         pdf.write(5, f"Intervalos IVAN: {str(row.get('Int_IVAN', 'N/A'))}\n")
@@ -123,26 +124,24 @@ if df is not None:
         copy_html = f"""<button class="copy-btn" onclick="navigator.clipboard.writeText('{APP_URL}')">📋 Copiar enlace</button>"""
         st.components.v1.html(copy_html, height=50)
 
-    # 3. VISTA WEB CON PESTAÑAS (TABS)
+    # 3. VISTA WEB CON TABS Y FORMATO DE NOTAS AJUSTADO
     if nat_sel:
-        # Se crean las pestañas basadas en la selección del usuario
         tabs = st.tabs(nat_sel)
-        
         for i, tab in enumerate(tabs):
             with tab:
                 tipo_actual = nat_sel[i]
-                # Obtenemos la fila de datos para el tipo de acorde de esta pestaña
                 row = df_raiz[df_raiz['Naturaleza'] == tipo_actual].iloc[0]
                 
-                # Información del acorde
                 st.markdown(f"### {row['Raiz']} {row['Naturaleza']}")
-                st.write(f"**Notas:** {', '.join([str(row.get(n,'')) for n in ['N1','N2','N3','N4'] if pd.notna(row.get(n))])}")
+                
+                # --- AJUSTE: Separador de notas con guion en la web ---
+                lista_notas = [str(row.get(n,'')) for n in ['N1','N2','N3','N4'] if pd.notna(row.get(n))]
+                st.write(f"**Notas:** {' - '.join(lista_notas)}")
                 
                 col1, col2 = st.columns(2)
                 col1.success(f"**IVAN:** {row.get('Int_IVAN','')}")
                 col2.info(f"**TRAD:** {row.get('Int_TRAD','')}")
                 
-                # Generar scroll de imágenes
                 h_items = ""
                 for j in range(1, 10):
                     v = str(row.get(f'Diagrama{j}', 'nan'))
