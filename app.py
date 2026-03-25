@@ -29,7 +29,7 @@ def load():
         return df
     except: return None
 
-# --- FUNCIÓN PARA GENERAR PDF (REVISADA PARA TAMAÑO Y ALINEACIÓN) ---
+# --- FUNCIÓN PARA GENERAR PDF (CON RECUADRO, ESPACIADO Y ETIQUETAS Px) ---
 def generar_pdf(dataframe_seleccionado):
     pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.set_auto_page_break(auto=True, margin=15)
@@ -37,16 +37,20 @@ def generar_pdf(dataframe_seleccionado):
     for _, row in dataframe_seleccionado.iterrows():
         pdf.add_page()
         
-        # Título del Acorde (Usa fuente estándar 'B' para negrita)
+        # --- TÍTULO CON RECUADRO ---
         pdf.set_font("Helvetica", "B", 24)
         pdf.set_text_color(20, 20, 20)
-        pdf.cell(0, 15, f"{row['Raiz']} {row['Naturaleza']}", ln=True, align='C')
+        # Dibujamos una celda con borde (border=1) y alineación centrada
+        pdf.cell(0, 20, f"{row['Raiz']} {row['Naturaleza']}", border=1, ln=True, align='C')
+        
+        # --- MÁS ESPACIO DESPUÉS DEL TÍTULO ---
+        pdf.ln(12) # Aumentamos el espacio significativamente
         
         # Notas
         pdf.set_font("Helvetica", "B", 12)
         pdf.set_text_color(60, 60, 60)
         notas = [str(row[c]).strip() for c in ['N1','N2','N3','N4'] if c in row and pd.notna(row[c]) and str(row[c]).lower() not in ['nan','','0']]
-        pdf.cell(0, 10, f"Notas: {' - '.join(notas)}", ln=True)
+        pdf.cell(0, 8, f"Notas: {' - '.join(notas)}", ln=True)
         
         # Intervalos
         pdf.set_font("Helvetica", "B", 10)
@@ -57,16 +61,13 @@ def generar_pdf(dataframe_seleccionado):
         
         pdf.ln(10) # Espacio antes de los diagramas
 
-        # --- LÓGICA DE DIAGRAMAS (REVISADA PARA UNIFORMIDAD) ---
-        # Dimensiones de la cuadrícula y diagramas (en mm)
-        X_START = 15          # Margen izquierdo
-        GAP_X = 5             # Espacio entre columnas
-        GAP_Y = 10            # Espacio vertical fijo
-        COLS = 4              # Número de diagramas por fila
-        
-        # TAMAÑO FIJO PARA TODOS (esto es lo importante para la uniformidad)
-        DIAG_WIDTH = 38       # Un poco más chicos (era 42)
-        DIAG_HEIGHT = 45      # Altura FIJA para todos (fuerza el escalado)
+        # --- CUADRÍCULA DE DIAGRAMAS ---
+        X_START = 15
+        GAP_X = 5
+        GAP_Y = 15            # Un poco más de espacio vertical para el texto Px
+        COLS = 4
+        DIAG_WIDTH = 38
+        DIAG_HEIGHT = 45
         
         y_inicial_fila = pdf.get_y()
         count = 0
@@ -82,27 +83,27 @@ def generar_pdf(dataframe_seleccionado):
                     img_data = requests.get(url_img, timeout=5).content
                     img_buffer = BytesIO(img_data)
                     
-                    # Calcular posición
                     col = count % COLS
                     fila = count // COLS
                     
-                    # Si cambiamos de fila, actualizamos la Y inicial de la fila
                     if col == 0 and fila > 0:
-                        y_inicial_fila += (DIAG_HEIGHT + GAP_Y)
+                        y_inicial_fila += (DIAG_HEIGHT + GAP_Y + 5) # +5 por el texto debajo
                     
-                    # Calcular X e Y absolutos
                     pos_x = X_START + (col * (DIAG_WIDTH + GAP_X))
                     
-                    # Salto de página si el diagrama va a quedar fuera (margen inferior de 15mm)
-                    if y_inicial_fila + DIAG_HEIGHT > 282: 
+                    if y_inicial_fila + DIAG_HEIGHT + 10 > 282: 
                         pdf.add_page()
-                        y_inicial_fila = 20 # Reseteamos Y en la nueva página
-                        # Si es el primer diagrama de la página, resetear X e Y
+                        y_inicial_fila = 20
                         pos_x = X_START + (col * (DIAG_WIDTH + GAP_X))
                     
-                    # Ponemos la imagen FFPDF la escalará para que encaje en el ancho Y el alto
-                    # Usamos `keep_aspect_ratio=True` (por defecto) para que no se deforme
+                    # Colocar Imagen
                     pdf.image(img_buffer, x=pos_x, y=y_inicial_fila, w=DIAG_WIDTH, h=DIAG_HEIGHT)
+                    
+                    # --- ETIQUETA Px DEBAJO DEL DIAGRAMA ---
+                    pdf.set_xy(pos_x, y_inicial_fila + DIAG_HEIGHT + 1)
+                    pdf.set_font("Helvetica", "", 9)
+                    pdf.set_text_color(128, 128, 128) # Gris como en la app
+                    pdf.cell(DIAG_WIDTH, 5, f"P{i}", border=0, ln=False, align='C')
                     
                     count += 1
                 except:
@@ -153,31 +154,28 @@ if df is not None:
         # --- EXPORTACIÓN PDF ---
         st.write("---")
         if nat_sel:
-            # Preparamos los datos
             df_export = df_raiz[df_raiz['Naturaleza'].isin(nat_sel)].copy()
-            # Aseguramos el orden correcto de los acordes en el PDF
             df_export['Naturaleza'] = pd.Categorical(df_export['Naturaleza'], categories=opciones_finales, ordered=True)
             df_export = df_export.sort_values('Naturaleza')
 
-            # Botón para generar (esto evita errores de Streamlit)
             if st.button("📥 Generar PDF", use_container_width=True):
-                with st.spinner("Descargando diagramas y armando PDF..."):
+                with st.spinner("Preparando archivo..."):
                     try:
                         pdf_bytes = generar_pdf(df_export)
                         st.download_button(
-                            label="🔥 ¡Listo! Descargar archivo",
+                            label="🔥 Descargar archivo PDF",
                             data=bytes(pdf_bytes),
                             file_name=f"Acordes_{raiz_sel}.pdf",
                             mime="application/pdf",
                             use_container_width=True
                         )
                     except Exception as e:
-                        st.error(f"Error al crear el PDF: {e}")
+                        st.error(f"Error: {e}")
         
         st.write("---")
         st.image(URL_QR, caption="Escanear para compartir", width=180)
 
-    # 4. RESULTADOS VISUALES (App web, sin cambios)
+    # 4. RESULTADOS (WEB)
     if nat_sel:
         df_f = df_raiz[df_raiz['Naturaleza'].isin(nat_sel)].copy()
         df_f['Naturaleza'] = pd.Categorical(df_f['Naturaleza'], categories=opciones_finales, ordered=True)
