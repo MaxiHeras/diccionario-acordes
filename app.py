@@ -7,7 +7,7 @@ from io import BytesIO
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
-# Estilos CSS
+# Estilos CSS - MODIFICADO PARA IMÁGENES MÁS GRANDES EN WEB
 st.markdown("""
     <style>
     @media (prefers-color-scheme: dark) { .chord-img { filter: invert(1) hue-rotate(180deg); } }
@@ -27,11 +27,17 @@ st.markdown("""
         transition: 0.3s;
     }
     .copy-btn:hover { background-color: #e0e2e6; }
+    
+    /* NUEVO: Clase CSS para controlar el tamaño de imagen en la web */
+    .chord-img-web {
+        width: 150px; /* Aumentado de 100px a 150px */
+        height: auto;
+    }
     </style>
 """, unsafe_allow_html=True)
 
-# 2. CARGA DE DATOS
-APP_URL = "https://diccionario-acordes-xz99pzx875gw2ytzpqxacv.streamlit.app/"
+# 2. CARGA DE DATOS (URL Original de Main)
+APP_URL = "https://diccionario-acordes-xz99pzx875gw2ytzpqacv.streamlit.app/"
 URL_EXCEL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
 URL_QR = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={APP_URL}"
 GITHUB_BASE = "https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main"
@@ -58,6 +64,7 @@ class PDF_Final(FPDF):
         self.set_text_color(190, 190, 190)
         self.cell(0, 10, "Maxi Heras - Tucumán", align='R')
 
+# --- ESTO SE MANTIENE IGUAL PARA EL PDF ---
 def generar_pdf(dataframe_seleccionado):
     pdf = PDF_Final(orientation='P', unit='mm', format='A4')
     pdf.set_auto_page_break(auto=True, margin=20)
@@ -73,7 +80,7 @@ def generar_pdf(dataframe_seleccionado):
         pdf.write(5, f"Intervalos IVAN: {str(row.get('Int_IVAN', 'N/A'))}\n")
         pdf.write(5, f"Intervalos TRAD: {str(row.get('Int_TRAD', 'N/A'))}\n")
         pdf.ln(10)
-        X_START, GAP_X, COLS, DIAG_W, DIAG_H = 15, 5, 4, 38, 45
+        X_START, GAP_X, COLS, DIAG_W, DIAG_H = 15, 5, 4, 38, 45 # Tamaños de PDF
         y_curr, count = pdf.get_y(), 0
         for i in range(1, 10):
             val = str(row.get(f'Diagrama{i}', 'nan')).strip()
@@ -111,10 +118,8 @@ if df is not None:
             st.session_state.ultima_raiz = raiz_sel
             st.session_state.seleccionados = opciones
 
-        # Multiselect con clave estable
         nat_sel = st.multiselect("Tipo:", opciones, key="seleccionados")
 
-        # Botones Todo / Limpiar usando on_click para evitar excepciones
         c1, c2 = st.columns(2)
         c1.button("Todo", use_container_width=True, on_click=seleccionar_todo, args=(opciones,))
         c2.button("Limpiar", use_container_width=True, on_click=limpiar_todo)
@@ -140,16 +145,20 @@ if df is not None:
         """
         st.components.v1.html(copy_html, height=50)
 
+    # 3. VISTA WEB - MODIFICADO PARA IMÁGENES MÁS GRANDES
     if nat_sel:
         for _, row in df_raiz[df_raiz['Naturaleza'].isin(nat_sel)].iterrows():
             with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=False):
                 col1, col2 = st.columns(2)
                 col1.success(f"**IVAN:** {row.get('Int_IVAN','')}")
                 col2.info(f"**TRAD:** {row.get('Int_TRAD','')}")
+                
                 h_items = ""
                 for i in range(1, 10):
                     v = str(row.get(f'Diagrama{i}', 'nan'))
                     if v.lower().endswith('.png'):
                         url = f"{GITHUB_BASE}/{str(row['Naturaleza']).replace(' ', '%20')}/{v.split('/')[-1]}"
-                        h_items += f'<div style="flex:0 0 auto; text-align:center;"><img src="{url}" width="100"><p style="font-size:10px;">P{i}</p></div>'
+                        # MODIFICADO: Usamos la nueva clase CSS chord-img-web
+                        h_items += f'<div style="flex:0 0 auto; text-align:center;"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{i}</p></div>'
+                
                 st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
