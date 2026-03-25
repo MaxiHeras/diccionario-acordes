@@ -14,7 +14,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 2. CARGA DE DATOS Y VARIABLES
+# 2. CARGA DE DATOS
 APP_URL = "https://diccionario-acordes-okhwulgyz9ueachvkdfh26.streamlit.app/"
 URL_EXCEL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
 URL_QR = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={APP_URL}"
@@ -29,38 +29,29 @@ def load():
 
 df = load()
 
-# FUNCIÓN PARA GENERAR PDF
+# FUNCIÓN PDF
 def create_pdf(df_filtered):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", "B", 16)
     pdf.cell(190, 10, "Hoja de Estudio de Acordes", ln=True, align="C")
-    pdf.set_font("Arial", "", 10)
-    pdf.cell(190, 10, f"Generado el: {datetime.date.today()}", ln=True, align="C")
     pdf.ln(10)
-    
     for _, row in df_filtered.iterrows():
         pdf.set_font("Arial", "B", 12)
         pdf.cell(0, 10, f"Acorde: {row['Raiz']} {row['Naturaleza']}", ln=True)
         pdf.set_font("Arial", "", 10)
-        
-        # Notas e Intervalos
         notas = [str(row[c]) for c in ['N1','N2','N3','N4'] if pd.notna(row.get(c)) and str(row[c]) not in ['0','nan']]
         pdf.cell(0, 7, f"Notas: {' - '.join(notas)}", ln=True)
-        
         ivan = str(row.get('Int_IVAN', ''))
         if ivan and ivan.lower() not in ['nan', '0', '']:
             pdf.cell(0, 7, f"Int_IVAN: {ivan}", ln=True)
-            
         trad = str(row.get('Int_TRAD', ''))
         if trad and trad.lower() not in ['nan', '0', '']:
             pdf.cell(0, 7, f"Int_TRAD: {trad}", ln=True)
-        
         pdf.ln(5)
         pdf.line(10, pdf.get_y(), 200, pdf.get_y())
         pdf.ln(5)
-        
-    return pdf.output(dest='S').encode('latin-1')
+    return pdf.output(dest='S').encode('latin-1', 'ignore')
 
 if df is not None:
     # 3. BARRA LATERAL
@@ -69,17 +60,13 @@ if df is not None:
         notas_orden = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B']
         r_list = [n for n in notas_orden if n in df['Raiz'].unique()]
         raiz_sel = st.selectbox("Nota Raíz:", r_list)
-        
         df_raiz = df[df['Raiz'] == raiz_sel]
         nat_sel = st.multiselect("Tipo:", options=df_raiz['Naturaleza'].unique())
         
         st.write("---")
-        
-        # BOTÓN WHATSAPP
         texto_wa = f"Mira este diccionario de acordes: {APP_URL}"
         link_wa = f"https://wa.me/?text={texto_wa.replace(' ', '%20')}"
         st.link_button("📲 Compartir por WhatsApp", link_wa, use_container_width=True)
-        
         st.image(URL_QR, caption="Escanear para compartir", width=180)
         st.code(APP_URL, language=None)
 
@@ -87,41 +74,39 @@ if df is not None:
     if nat_sel:
         df_f = df_raiz[df_raiz['Naturaleza'].isin(nat_sel)]
         
-        # BOTÓN GENERADOR DE PDF
-        pdf_data = create_pdf(df_f)
-        st.download_button(
-            label="📄 Descargar Hoja de Estudio (PDF)",
-            data=pdf_data,
-            file_name=f"Acordes_{raiz_sel}.pdf",
-            mime="application/pdf"
-        )
-        
+        # Botón PDF
+        try:
+            pdf_data = create_pdf(df_f)
+            st.download_button("📄 Descargar Hoja de Estudio (PDF)", pdf_data, f"Acordes_{raiz_sel}.pdf", "application/pdf")
+        except:
+            st.warning("El PDF estará disponible cuando se instale la librería fpdf en GitHub.")
+
         esta_expandido = False if len(nat_sel) > 1 else True
         
         for idx, row in df_f.iterrows():
             with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=esta_expandido):
-                notas = [str(row[c]).strip() for c in ['N1','N2','N3','N4'] if pd.notna(row.get(c)) and str(row[c]).lower() not in ['nan','','0']]
-                st.write(f"**Notas:** {' - '.join(notas)}")
+                st.write(f"**Notas:** {' - '.join([str(row[c]).strip() for c in ['N1','N2','N3','N4'] if pd.notna(row.get(c)) and str(row[c]).lower() not in ['nan','','0']])}")
                 
-                col1, col2 = st.columns(2)
-                with col1:
+                c1, c2 = st.columns(2)
+                with c1:
                     ivan = str(row.get('Int_IVAN', '')).strip()
                     if ivan and ivan.lower() not in ['nan', '0', '']:
                         st.info(f"**Int_IVAN:**\n\n{ivan}")
-                with col2:
+                with c2:
                     trad = str(row.get('Int_TRAD', '')).strip()
                     if trad and trad.lower() not in ['nan', '0', '']:
                         st.success(f"**Int_TRAD:**\n\n{trad}")
                 
                 st.write("---")
                 
+                # Galería
                 h_items = ""
                 GITHUB_BASE = "https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main"
                 for i in range(1, 10):
                     val = str(row.get(f'Diagrama{i}', 'nan')).strip()
                     if val.lower().endswith('.png'):
-                        nombre_archivo = val.split('/')[-1]
-                        url_img = f"{GITHUB_BASE}/{row['Naturaleza']}/{nombre_archivo}"
+                        nombre = val.split('/')[-1]
+                        url_img = f"{GITHUB_BASE}/{row['Naturaleza']}/{nombre}"
                         div_id = f"pos_{idx}_{i}"
                         h_items += f'<div class="chord-item" id="{div_id}"><img src="{url_img}" class="chord-img" width="110" onerror="document.getElementById(\'{div_id}\').style.display=\'none\';"><p style="font-size:12px;color:gray;">P{i}</p></div>'
                 
@@ -130,4 +115,4 @@ if df is not None:
     else:
         st.info("Elegí un acorde en el menú lateral.")
 else:
-    st.error("Error al cargar el Excel.")
+    st.error("No se pudo cargar el Excel. Revisá la URL.")
