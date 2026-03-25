@@ -8,15 +8,20 @@ import urllib.parse
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
-# CSS: VELOCIDAD, DISEÑO MÓVIL Y SEPARACIÓN DE MODOS
+# CSS: AJUSTE DE ALTURA EN SIDEBAR Y DISEÑO GENERAL
 st.markdown("""
     <style>
     @media (prefers-color-scheme: dark) { .chord-img-web { filter: invert(1) hue-rotate(180deg); } }
     .scroll-container { display: flex; overflow-x: auto; gap: 15px; padding: 10px 0; }
     .chord-img-web { width: 150px; height: auto; display: block; margin: 0 auto; }
     
+    /* SUBE EL CONTENIDO DE LA BARRA LATERAL */
+    [data-testid="stSidebarUserContent"] {
+        padding-top: 1.5rem !important;
+    }
+
     /* SEPARACIÓN DE MODOS */
-    div[data-testid="stRadio"] > div { gap: 25px !important; padding: 15px 0; }
+    div[data-testid="stRadio"] > div { gap: 25px !important; padding: 10px 0; }
     [data-testid="stWidgetLabel"] p { font-weight: bold; font-size: 16px; }
 
     [data-testid="stHorizontalBlock"] { display: flex !important; flex-direction: row !important; flex-wrap: wrap !important; gap: 4px !important; }
@@ -130,9 +135,8 @@ if df is not None:
             st.write("")
             placeholder = st.empty()
             
-            # LÓGICA DE TEXTO DINÁMICO EN CURSIVA
             if st.session_state.descargado:
-                placeholder.markdown("✅ *¡Listo, guardado!*")
+                placeholder.markdown("✅✅ *¡Listo, guardado!*")
             elif st.session_state.pdf_data:
                 placeholder.markdown("✅ *¡Listo para guardar!*")
 
@@ -159,9 +163,14 @@ if df is not None:
 
             st.write("---")
             st.write("📲 **Compartir App**")
+            
+            # BOTÓN COPIAR AL PORTAPAPELES
+            if st.button("🔗 Copiar enlace de la App"):
+                st.write(f'<script>navigator.clipboard.writeText("{APP_URL}");</script>', unsafe_allow_html=True)
+                st.toast("¡Enlace copiado!", icon="🔗")
+            
             qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={urllib.parse.quote(APP_URL)}"
-            st.image(qr_url)
-            st.code(APP_URL, language=None)
+            st.image(qr_url, caption="Escaneá para abrir")
         
         else:
             st.header("🔍 Identificador")
@@ -199,19 +208,3 @@ if df is not None:
                             url = f"{GITHUB_BASE}/{str(row['Naturaleza']).replace(' ', '%20')}/{v.split('/')[-1]}"
                             h_items += f'<div style="flex:0 0 auto; text-align:center;"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
                     st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
-
-    else: # MODO IDENTIFICADOR
-        seleccion = st.session_state.notas_inversas
-        if seleccion:
-            res = df[df.apply(lambda r: seleccion == {str(r[n]) for n in ['N1','N2','N3','N4'] if pd.notna(r[n])}, axis=1)]
-            if not res.empty:
-                for _, row in res.iterrows():
-                    with st.expander(f"✅ {row['Raiz']} {row['Naturaleza']}", expanded=True):
-                        st.info(f"**IVAN:** {row.get('Int_IVAN','')} | **TRAD:** {row.get('Int_TRAD','')}")
-                        h_items = ""
-                        for j in range(1, 10):
-                            v = str(row.get(f'Diagrama{j}', 'nan'))
-                            if v.lower().endswith('.png'):
-                                url = f"{GITHUB_BASE}/{str(row['Naturaleza']).replace(' ', '%20')}/{v.split('/')[-1]}"
-                                h_items += f'<div style="flex:0 0 auto; text-align:center;"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
-                        st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
