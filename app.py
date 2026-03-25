@@ -22,25 +22,11 @@ st.markdown("""
     [data-testid="stSidebar"] [data-testid="column"] { width: 32% !important; flex: 1 1 32% !important; min-width: 32% !important; }
     .stButton > button { width: 100% !important; padding: 5px 2px !important; font-size: 13px !important; min-height: 42px !important; border-radius: 6px !important; }
     
-    /* Estilo del botón de copia mejorado */
-    .copy-box {
-        background-color: #f0f2f6;
-        border: 1px solid #d3d3d3;
-        border-radius: 5px;
-        padding: 10px;
-        cursor: pointer;
-        text-align: center;
-    }
-    .copy-input {
-        border: none;
-        background: transparent;
-        width: 100%;
-        text-align: center;
-        font-size: 13px;
-        color: #31333F;
-        cursor: pointer;
-        outline: none;
-        user-select: all;
+    /* Estilo para que el input de copia se vea limpio */
+    .stTextInput > div > div > input {
+        cursor: text !important;
+        font-family: monospace;
+        font-size: 12px !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -79,7 +65,7 @@ def mostrar_detalle_acorde(row):
     lista_n = [str(row.get(n,'')) for n in ['N1','N2','N3','N4'] if pd.notna(row.get(n))]
     st.write(f"**Notas:** {' - '.join(lista_n)}")
     c1, c2 = st.columns(2)
-    # Int_IVAN en Verde y Int_TRAD en Azul
+    # Colores corregidos
     with c1: st.success(f"**Int_IVAN:** {row.get('Int_IVAN','N/A')}") 
     with c2: st.info(f"**Int_TRAD:** {row.get('Int_TRAD','N/A')}")
     st.write("---")
@@ -93,6 +79,7 @@ def mostrar_detalle_acorde(row):
             h_items += f'<div class="chord-diag-item"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
     if h_items: st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
 
+# 3. MOTOR PDF
 class PDF_Final(FPDF):
     def footer(self):
         self.set_y(-15)
@@ -189,36 +176,9 @@ if df is not None:
         qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={urllib.parse.quote(APP_URL)}"
         st.image(qr_url, caption="Escaneá para abrir", width=180)
         
-        # BOTÓN DE COPIAR CORREGIDO (Click con K, readonly y fallback)
-        st.markdown(f"""
-            <div class="copy-box" onclick="copyToClipboard()">
-                <small style="color:gray;">📋 Click para copiar enlace:</small>
-                <input type="text" value="{APP_URL}" id="urlField" class="copy-input" readonly>
-                <div id="copy-status" style="display:none; color: #00873c; font-size: 11px; font-weight: bold; margin-top:5px;">✅ ¡Copiado al Portapapeles!</div>
-            </div>
-            <script>
-            function copyToClipboard() {{
-                var copyText = document.getElementById("urlField");
-                copyText.select();
-                copyText.setSelectionRange(0, 99999); // Para móviles
-                
-                try {{
-                    // Intento con API moderna
-                    navigator.clipboard.writeText(copyText.value).then(showSuccess);
-                }} catch (err) {{
-                    // Fallback con execCommand si la API es bloqueada
-                    document.execCommand("copy");
-                    showSuccess();
-                }}
-            }}
-            
-            function showSuccess() {{
-                var status = document.getElementById("copy-status");
-                status.style.display = "block";
-                setTimeout(function(){{ status.style.display = "none"; }}, 2000);
-            }}
-            </script>
-        """, unsafe_allow_html=True)
+        # URL VISIBLE CON ICONO DE COPIA (Sin JavaScript fallido)
+        st.text_input("📋 Copiar enlace:", value=APP_URL, disabled=False, label_visibility="collapsed")
+        st.caption("Tocá el icono de la derecha para copiar.")
 
     # CUERPO PRINCIPAL
     if modo == "Diccionario 📖":
