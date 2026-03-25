@@ -21,6 +21,8 @@ st.markdown("""
     [data-testid="stSidebar"] [data-testid="stHorizontalBlock"] { display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; gap: 5px !important; }
     [data-testid="stSidebar"] [data-testid="column"] { width: 32% !important; flex: 1 1 32% !important; min-width: 32% !important; }
     .stButton > button { width: 100% !important; padding: 5px 2px !important; font-size: 13px !important; min-height: 42px !important; border-radius: 6px !important; }
+    /* Ajuste para el input de copia */
+    .stTextInput > div > div > input { color: #555 !important; font-size: 12px !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -37,7 +39,6 @@ def load():
         return df
     except: return None
 
-# Estados de sesión
 if "seleccionados" not in st.session_state: st.session_state.seleccionados = []
 if "notas_inversas" not in st.session_state: st.session_state.notas_inversas = set()
 if "pdf_data" not in st.session_state: st.session_state.pdf_data = None
@@ -57,12 +58,9 @@ def mostrar_detalle_acorde(row):
     st.markdown(f"### {row['Raiz']} {row['Naturaleza']}")
     lista_n = [str(row.get(n,'')) for n in ['N1','N2','N3','N4'] if pd.notna(row.get(n))]
     st.write(f"**Notas:** {' - '.join(lista_n)}")
-    
     c1, c2 = st.columns(2)
-    # IVAN en Verde y TRAD en Azul
     with c1: st.success(f"**Int_IVAN:** {row.get('Int_IVAN','N/A')}") 
     with c2: st.info(f"**Int_TRAD:** {row.get('Int_TRAD','N/A')}")
-    
     st.write("---")
     st.write("**Diagramas:**")
     h_items = ""
@@ -74,7 +72,6 @@ def mostrar_detalle_acorde(row):
             h_items += f'<div class="chord-diag-item"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
     if h_items: st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
 
-# 3. MOTOR PDF CON ALINEACIÓN CORREGIDA
 class PDF_Final(FPDF):
     def footer(self):
         self.set_y(-15)
@@ -90,18 +87,13 @@ def generar_pdf(dataframe_seleccionado):
         pdf.set_font("helvetica", "B", 24)
         pdf.cell(0, 20, f"{row['Raiz']} {row['Naturaleza']}", border=1, ln=True, align='C')
         pdf.ln(8) 
-        
         pdf.set_font("helvetica", "B", 11); pdf.write(6, "Notas: "); pdf.set_font("helvetica", "", 11)
         pdf.write(6, f"{' - '.join([str(row.get(n,'')) for n in ['N1','N2','N3','N4'] if pd.notna(row.get(n))])}\n")
-        
-        # Etiquetas actualizadas en PDF
         pdf.set_font("helvetica", "B", 11); pdf.write(6, "Int_IVAN: "); pdf.set_font("helvetica", "", 11)
         pdf.write(6, f"{str(row.get('Int_IVAN', 'N/A'))}\n")
         pdf.set_font("helvetica", "B", 11); pdf.write(6, "Int_TRAD: "); pdf.set_font("helvetica", "", 11)
         pdf.write(6, f"{str(row.get('Int_TRAD', 'N/A'))}\n")
-        
         pdf.ln(14) 
-        # Grilla con tamaño y alineación fija
         X_START, GAP_X, GAP_Y, COLS, DIAG_W, DIAG_H = 15, 8, 12, 4, 38, 45
         y_grid_top = pdf.get_y()
         count = 0
@@ -120,7 +112,6 @@ def generar_pdf(dataframe_seleccionado):
                 except: continue
     return pdf.output()
 
-# --- LÓGICA DE INTERFAZ ---
 df = load()
 if df is not None:
     notas_musicales = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B']
@@ -135,23 +126,19 @@ if df is not None:
             raiz_sel = st.selectbox("Nota Raíz:", [n for n in notas_musicales if n in df['Raiz'].unique()])
             df_raiz = df[df['Raiz'] == raiz_sel]
             opciones = [t for t in orden_tipos if t in df_raiz['Naturaleza'].unique()]
-            
             if "u_raiz" not in st.session_state or st.session_state.u_raiz != raiz_sel:
                 st.session_state.u_raiz = raiz_sel
                 st.session_state.seleccionados = opciones
                 st.session_state.pdf_data = None
                 st.session_state.descargado = False
-
             st.multiselect("Tipo:", opciones, key="seleccionados")
             c1, c2 = st.columns(2)
             c1.button("Todo", on_click=seleccionar_todo, args=(opciones,), use_container_width=True)
             c2.button("Limpiar", on_click=limpiar_todo, use_container_width=True)
-            
             st.write("")
             placeholder = st.empty()
             if st.session_state.descargado: placeholder.success("✅ ¡Listo, guardado!")
             elif st.session_state.pdf_data: placeholder.info("✅ ¡Listo para guardar!")
-
             if st.button("📥 Generar PDF de Selección", use_container_width=True):
                 df_para_pdf = df_raiz[df_raiz['Naturaleza'].isin(st.session_state.seleccionados)]
                 if not df_para_pdf.empty:
@@ -159,10 +146,8 @@ if df is not None:
                     st.session_state.pdf_data = generar_pdf(df_para_pdf)
                     st.session_state.descargado = False
                     st.rerun()
-
             if st.session_state.pdf_data:
                 st.download_button("💾 GUARDAR ARCHIVO", bytes(st.session_state.pdf_data), f"Acordes_{raiz_sel}.pdf", "application/pdf", use_container_width=True, type="primary", on_click=lambda: st.session_state.update({"descargado": True}))
-
         else:
             st.write("### Identificador")
             for i in range(0, len(notas_musicales), 3):
@@ -175,7 +160,6 @@ if df is not None:
                         with cols[j]:
                             if st.button(n, key=f"id_{n}", type="primary" if active else "secondary"):
                                 toggle_nota(n); st.rerun()
-            
             if st.button("🗑️ Borrar Notas", use_container_width=True):
                 st.session_state.notas_inversas = set(); st.rerun()
 
@@ -184,49 +168,9 @@ if df is not None:
         qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={urllib.parse.quote(APP_URL)}"
         st.image(qr_url, caption="Escaneá para abrir", width=180)
         
-        # BOTÓN DE COPIAR CON JS
-        st.markdown(f"""
-            <div id="copy-container">
-                <button id="copy-btn" onclick="copyToClipboard()" style="
-                    width: 100%; 
-                    background-color: #f0f2f6; 
-                    border: 1px solid #d3d3d3; 
-                    padding: 10px; 
-                    border-radius: 5px; 
-                    cursor: pointer;
-                    font-family: sans-serif;
-                    font-size: 14px;
-                    transition: all 0.3s ease;">
-                    📋 Copiar enlace de la app
-                </button>
-                <p id="copy-msg" style="
-                    display: none; 
-                    color: #00873c; 
-                    font-size: 12px; 
-                    margin-top: 5px; 
-                    text-align: center; 
-                    font-weight: bold;">
-                    ✅ Copiado al Portapapeles
-                </p>
-            </div>
-            <script>
-            function copyToClipboard() {{
-                const url = "{APP_URL}";
-                navigator.clipboard.writeText(url).then(() => {{
-                    const btn = document.getElementById('copy-btn');
-                    const msg = document.getElementById('copy-msg');
-                    btn.innerText = "¡Copiado!";
-                    btn.style.backgroundColor = "#e1f5fe";
-                    msg.style.display = "block";
-                    setTimeout(() => {{
-                        btn.innerText = "📋 Copiar enlace de la app";
-                        btn.style.backgroundColor = "#f0f2f6";
-                        msg.style.display = "none";
-                    }}, 2000);
-                }});
-            }}
-            </script>
-        """, unsafe_allow_html=True)
+        # MÉTODO OFICIAL DE COPIA (Sin JavaScript que falle)
+        st.text_input("📋 Enlace de la app:", value=APP_URL, help="Copia el enlace de arriba")
+        st.caption("Selecciona el texto de arriba para copiarlo.")
 
     # CUERPO PRINCIPAL
     if modo == "Diccionario 📖":
