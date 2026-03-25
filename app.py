@@ -16,6 +16,7 @@ st.markdown("""
         width: 100% !important;
         border: 1px solid #ff4b4b;
     }
+    /* Estilo para el botón de copia personalizado */
     .copy-btn {
         width: 100%;
         cursor: pointer;
@@ -31,8 +32,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # 2. CARGA DE DATOS
-# IMPORTANTE: Usamos la URL original de tu App principal
-APP_URL = "https://diccionario-acordes-xz99pzx875gw2ytzpqacv.streamlit.app/"
+APP_URL = "https://diccionario-acordes-xz99pzx875gw2ytzpqxacv.streamlit.app/"
 URL_EXCEL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
 URL_QR = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={APP_URL}"
 GITHUB_BASE = "https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main"
@@ -126,6 +126,7 @@ if df is not None:
                     st.download_button("🔥 Descargar", data=bytes(pdf_bytes), file_name=f"Acordes_{raiz_sel}.pdf", mime="application/pdf", use_container_width=True)
 
         st.write("---")
+        # RESTAURADO: QR y Enlace de Copia
         st.image(URL_QR, caption="App Online", width=150)
         st.write("Link de la App:")
         
@@ -137,7 +138,6 @@ if df is not None:
         st.components.v1.html(copy_html, height=50)
 
     if nat_sel:
-        # Se muestran contraídos por defecto
         for _, row in df_raiz[df_raiz['Naturaleza'].isin(nat_sel)].iterrows():
             with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=False):
                 col1, col2 = st.columns(2)
