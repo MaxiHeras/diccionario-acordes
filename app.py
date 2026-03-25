@@ -8,19 +8,29 @@ import urllib.parse
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
-# CSS: AJUSTES DE POSICIÓN, ESPACIADO Y GRILLA
+# CSS: AJUSTES DE POSICIÓN PARA ELIMINAR ESPACIOS EN BLANCO
 st.markdown("""
     <style>
+    /* 1. SUBIR CONTENIDO DE LA BARRA LATERAL (Pegado a la X) */
+    [data-testid="stSidebarUserContent"] { 
+        padding-top: 0.5rem !important; 
+    }
+    
+    /* 2. SUBIR CONTENIDO PRINCIPAL (Eliminar espacio superior) */
+    .block-container {
+        padding-top: 1rem !important;
+        padding-bottom: 0rem !important;
+    }
+
+    /* 3. SEPARAR DICCIONARIO E IDENTIFICADOR EN EL RADIO */
+    div[data-testid="stRadio"] > div { 
+        gap: 20px; 
+        margin-top: 10px;
+    }
+
+    /* 4. AJUSTES VISUALES GENERALES */
     @media (prefers-color-scheme: dark) { .chord-img-web { filter: invert(1) hue-rotate(180deg); } }
     
-    /* SUBE EL CONTENIDO AL TOQUE DE LA X */
-    [data-testid="stSidebarUserContent"] { padding-top: 0.5rem !important; }
-
-    /* SEPARACIÓN ENTRE DICCIONARIO E IDENTIFICADOR */
-    [data-testid="stSidebar"] [data-testid="stWidgetLabel"] + div { margin-top: 10px; }
-    [data-testid="stSidebar"] label[data-testid="stWidgetLabel"] { margin-bottom: 15px; }
-    div[data-testid="stRadio"] > div { gap: 15px; } /* Separa las opciones del radio */
-
     .scroll-container { 
         display: flex !important; 
         overflow-x: auto !important; 
@@ -85,14 +95,17 @@ def toggle_nota(nota):
     if nota in st.session_state.notas_inversas: st.session_state.notas_inversas.remove(nota)
     else: st.session_state.notas_inversas.add(nota)
 
-# Función de detalle con colores
+# Función de detalle con colores (IVAN: Azul, TRAD: Verde)
 def mostrar_detalle_acorde(row):
     st.markdown(f"### {row['Raiz']} {row['Naturaleza']}")
     lista_n = [str(row.get(n,'')) for n in ['N1','N2','N3','N4'] if pd.notna(row.get(n))]
     st.write(f"**Notas:** {' - '.join(lista_n)}")
+    
+    # Columnas para intervalos con colores específicos
     c1, c2 = st.columns(2)
     with c1: st.info(f"**IVAN:** {row.get('Int_IVAN','N/A')}")
     with c2: st.success(f"**TRAD:** {row.get('Int_TRAD','N/A')}")
+    
     st.write("---")
     st.write("**Diagramas:**")
     h_items = ""
@@ -104,7 +117,7 @@ def mostrar_detalle_acorde(row):
             h_items += f'<div class="chord-diag-item"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
     if h_items: st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
 
-# 3. MOTOR PDF
+# 3. MOTOR PDF (Lógica simplificada para brevedad)
 class PDF_Final(FPDF):
     def footer(self):
         self.set_y(-15)
@@ -164,7 +177,7 @@ if df is not None:
             df_raiz = df[df['Raiz'] == raiz_sel]
             opciones = [t for t in orden_tipos if t in df_raiz['Naturaleza'].unique()]
             
-            # Autoseleccionar todo al cambiar nota manualmente
+            # Autoseleccionar todo al cambiar nota manualmente o al entrar por primera vez
             if "u_raiz" not in st.session_state or st.session_state.u_raiz != raiz_sel:
                 st.session_state.u_raiz = raiz_sel
                 st.session_state.seleccionados = opciones
@@ -211,10 +224,7 @@ if df is not None:
         st.write("---")
         st.write("📲 **Compartir App**")
         qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={urllib.parse.quote(APP_URL)}"
-        st.image(qr_url, caption="Escaneá para abrir", width=200)
-        if st.button("🔗 Copiar enlace"):
-            st.code(APP_URL, language=None)
-            st.toast("¡Enlace listo!", icon="🔗")
+        st.image(qr_url, caption="Escaneá para abrir", width=180)
 
     # --- CUERPO PRINCIPAL ---
     if modo == "Diccionario 📖":
@@ -228,10 +238,10 @@ if df is not None:
                     mostrar_detalle_acorde(row)
         else: st.info("Seleccioná tipos en el sidebar.")
     else:
-        st.header("Acorde Resultante:")
+        st.header("🔍 Identificador de Acordes")
         notas_act = st.session_state.notas_inversas
         res = df[df.apply(lambda r: set([str(r[n]) for n in ['N1','N2','N3','N4'] if pd.notna(r[n])]) == notas_act, axis=1)]
         if notas_act:
             if not res.empty: mostrar_detalle_acorde(res.iloc[0])
             else: st.warning("Acorde no identificado.")
-        else: st.info("Seleccioná notas en la barra lateral.")
+        else: st.info("Seleccioná notas en la barra lateral para identificar el acorde.")
