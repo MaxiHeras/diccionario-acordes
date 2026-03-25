@@ -11,57 +11,16 @@ st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_s
 # CSS: AJUSTES DE POSICIÓN PARA ELIMINAR ESPACIOS EN BLANCO
 st.markdown("""
     <style>
-    /* 1. SUBIR CONTENIDO DE LA BARRA LATERAL (Pegado a la X) */
-    [data-testid="stSidebarUserContent"] { 
-        padding-top: 0.5rem !important; 
-    }
-    
-    /* 2. SUBIR CONTENIDO PRINCIPAL (Eliminar espacio superior) */
-    .block-container {
-        padding-top: 1rem !important;
-        padding-bottom: 0rem !important;
-    }
-
-    /* 3. SEPARAR DICCIONARIO E IDENTIFICADOR EN EL RADIO */
-    div[data-testid="stRadio"] > div { 
-        gap: 20px; 
-        margin-top: 10px;
-    }
-
-    /* 4. AJUSTES VISUALES GENERALES */
+    [data-testid="stSidebarUserContent"] { padding-top: 0.5rem !important; }
+    .block-container { padding-top: 1rem !important; padding-bottom: 0rem !important; }
+    div[data-testid="stRadio"] > div { gap: 20px; margin-top: 10px; }
     @media (prefers-color-scheme: dark) { .chord-img-web { filter: invert(1) hue-rotate(180deg); } }
-    
-    .scroll-container { 
-        display: flex !important; 
-        overflow-x: auto !important; 
-        gap: 15px !important; 
-        padding: 10px 0 !important; 
-        flex-wrap: nowrap !important;
-    }
+    .scroll-container { display: flex !important; overflow-x: auto !important; gap: 15px !important; padding: 10px 0 !important; flex-wrap: nowrap !important; }
     .chord-diag-item { flex: 0 0 auto !important; width: 150px !important; text-align: center; }
     .chord-img-web { width: 100% !important; height: auto !important; }
-    
-    /* FORZAR 3 COLUMNAS EN SIDEBAR */
-    [data-testid="stSidebar"] [data-testid="stHorizontalBlock"] {
-        display: flex !important;
-        flex-direction: row !important;
-        flex-wrap: nowrap !important;
-        gap: 5px !important;
-    }
-    [data-testid="stSidebar"] [data-testid="column"] {
-        width: 32% !important;
-        flex: 1 1 32% !important;
-        min-width: 32% !important;
-    }
-
-    /* ESTILO DE BOTONES */
-    .stButton > button {
-        width: 100% !important;
-        padding: 5px 2px !important;
-        font-size: 13px !important;
-        min-height: 42px !important;
-        border-radius: 6px !important;
-    }
+    [data-testid="stSidebar"] [data-testid="stHorizontalBlock"] { display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; gap: 5px !important; }
+    [data-testid="stSidebar"] [data-testid="column"] { width: 32% !important; flex: 1 1 32% !important; min-width: 32% !important; }
+    .stButton > button { width: 100% !important; padding: 5px 2px !important; font-size: 13px !important; min-height: 42px !important; border-radius: 6px !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -95,17 +54,13 @@ def toggle_nota(nota):
     if nota in st.session_state.notas_inversas: st.session_state.notas_inversas.remove(nota)
     else: st.session_state.notas_inversas.add(nota)
 
-# Función de detalle con colores (IVAN: Azul, TRAD: Verde)
 def mostrar_detalle_acorde(row):
     st.markdown(f"### {row['Raiz']} {row['Naturaleza']}")
     lista_n = [str(row.get(n,'')) for n in ['N1','N2','N3','N4'] if pd.notna(row.get(n))]
     st.write(f"**Notas:** {' - '.join(lista_n)}")
-    
-    # Columnas para intervalos con colores específicos
     c1, c2 = st.columns(2)
     with c1: st.info(f"**IVAN:** {row.get('Int_IVAN','N/A')}")
     with c2: st.success(f"**TRAD:** {row.get('Int_TRAD','N/A')}")
-    
     st.write("---")
     st.write("**Diagramas:**")
     h_items = ""
@@ -117,7 +72,7 @@ def mostrar_detalle_acorde(row):
             h_items += f'<div class="chord-diag-item"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
     if h_items: st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
 
-# 3. MOTOR PDF (Lógica simplificada para brevedad)
+# 3. MOTOR PDF CORREGIDO
 class PDF_Final(FPDF):
     def footer(self):
         self.set_y(-15)
@@ -130,14 +85,33 @@ def generar_pdf(dataframe_seleccionado):
     pdf.set_auto_page_break(auto=True, margin=20)
     for _, row in dataframe_seleccionado.iterrows():
         pdf.add_page()
+        # Título del acorde
         pdf.set_font("helvetica", "B", 24)
         pdf.cell(0, 20, f"{row['Raiz']} {row['Naturaleza']}", border=1, ln=True, align='C')
         pdf.ln(8) 
+        
+        # Línea de Notas
         notas_str = [str(row.get(n,'')) for n in ['N1','N2','N3','N4'] if pd.notna(row.get(n))]
         pdf.set_font("helvetica", "B", 11)
-        pdf.write(5, f"Notas: {' - '.join(notas_str)}\n")
-        pdf.write(5, f"IVAN: {str(row.get('Int_IVAN', 'N/A'))} | TRAD: {str(row.get('Int_TRAD', 'N/A'))}\n")
+        pdf.write(6, "Notas: ")
+        pdf.set_font("helvetica", "", 11)
+        pdf.write(6, f"{' - '.join(notas_str)}\n")
+        
+        # Línea de Int_IVAN
+        pdf.set_font("helvetica", "B", 11)
+        pdf.write(6, "Int_IVAN: ")
+        pdf.set_font("helvetica", "", 11)
+        pdf.write(6, f"{str(row.get('Int_IVAN', 'N/A'))}\n")
+        
+        # Línea de Int_TRAD
+        pdf.set_font("helvetica", "B", 11)
+        pdf.write(6, "Int_TRAD: ")
+        pdf.set_font("helvetica", "", 11)
+        pdf.write(6, f"{str(row.get('Int_TRAD', 'N/A'))}\n")
+        
         pdf.ln(10)
+        
+        # Grilla de Diagramas
         X_START, GAP_X, COLS, DIAG_W, DIAG_H = 15, 5, 4, 38, 45
         y_curr, count = pdf.get_y(), 0
         for i in range(1, 10):
@@ -165,7 +139,6 @@ if df is not None:
         modo = st.radio(" ", ["Diccionario 📖", "Identificador 🔍"], label_visibility="collapsed")
         st.write("---")
 
-        # Lógica para autoseleccionar todo al cambiar de IDENTIFICADOR a DICCIONARIO
         if st.session_state.modo_previo == "Identificador 🔍" and modo == "Diccionario 📖":
             df_c = df[df['Raiz'] == 'C']
             st.session_state.seleccionados = [t for t in orden_tipos if t in df_c['Naturaleza'].unique()]
@@ -177,7 +150,6 @@ if df is not None:
             df_raiz = df[df['Raiz'] == raiz_sel]
             opciones = [t for t in orden_tipos if t in df_raiz['Naturaleza'].unique()]
             
-            # Autoseleccionar todo al cambiar nota manualmente o al entrar por primera vez
             if "u_raiz" not in st.session_state or st.session_state.u_raiz != raiz_sel:
                 st.session_state.u_raiz = raiz_sel
                 st.session_state.seleccionados = opciones
