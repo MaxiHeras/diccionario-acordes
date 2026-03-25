@@ -7,43 +7,25 @@ from io import BytesIO
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
-# Estilos CSS - CORREGIDO PARA MODO OSCURO Y TAMAÑO WEB
+# Estilos CSS - MODO OSCURO, TAMAÑO WEB Y SCROLL
 st.markdown("""
     <style>
-    /* Inversión de colores para modo oscuro aplicada a la nueva clase */
     @media (prefers-color-scheme: dark) { 
         .chord-img-web { filter: invert(1) hue-rotate(180deg); } 
     }
-    
     .scroll-container { display: flex; overflow-x: auto; gap: 15px; padding: 10px 0; }
-    
-    div.stDownloadButton > button {
-        width: 100% !important;
-        border: 1px solid #ff4b4b;
-    }
-    
+    div.stDownloadButton > button { width: 100% !important; border: 1px solid #ff4b4b; }
     .copy-btn {
-        width: 100%;
-        cursor: pointer;
-        background-color: #f0f2f6;
-        border: 1px solid #dcdfe3;
-        padding: 8px;
-        border-radius: 5px;
-        font-size: 14px;
-        transition: 0.3s;
+        width: 100%; cursor: pointer; background-color: #f0f2f6;
+        border: 1px solid #dcdfe3; padding: 8px; border-radius: 5px;
+        font-size: 14px; transition: 0.3s;
     }
     .copy-btn:hover { background-color: #e0e2e6; }
-    
-    .chord-img-web {
-        width: 150px; 
-        height: auto;
-        display: block;
-        margin: 0 auto;
-    }
+    .chord-img-web { width: 150px; height: auto; display: block; margin: 0 auto; }
     </style>
 """, unsafe_allow_html=True)
 
-# 2. CARGA DE DATOS
+# 2. CARGA DE DATOS (URL Principal)
 APP_URL = "https://diccionario-acordes-xz99pzx875gw2ytzpqxacv.streamlit.app/"
 URL_EXCEL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
 URL_QR = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={APP_URL}"
@@ -130,8 +112,7 @@ if df is not None:
         
         st.write("---")
         if st.button("📥 Generar PDF", use_container_width=True):
-            if not nat_sel:
-                st.warning("Selecciona al menos un tipo.")
+            if not nat_sel: st.warning("Selecciona al menos un tipo.")
             else:
                 with st.spinner("Generando..."):
                     pdf_bytes = generar_pdf(df_raiz[df_raiz['Naturaleza'].isin(nat_sel)])
@@ -142,18 +123,31 @@ if df is not None:
         copy_html = f"""<button class="copy-btn" onclick="navigator.clipboard.writeText('{APP_URL}')">📋 Copiar enlace</button>"""
         st.components.v1.html(copy_html, height=50)
 
+    # 3. VISTA WEB CON PESTAÑAS (TABS)
     if nat_sel:
-        for _, row in df_raiz[df_raiz['Naturaleza'].isin(nat_sel)].iterrows():
-            with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=False):
+        # Se crean las pestañas basadas en la selección del usuario
+        tabs = st.tabs(nat_sel)
+        
+        for i, tab in enumerate(tabs):
+            with tab:
+                tipo_actual = nat_sel[i]
+                # Obtenemos la fila de datos para el tipo de acorde de esta pestaña
+                row = df_raiz[df_raiz['Naturaleza'] == tipo_actual].iloc[0]
+                
+                # Información del acorde
+                st.markdown(f"### {row['Raiz']} {row['Naturaleza']}")
+                st.write(f"**Notas:** {', '.join([str(row.get(n,'')) for n in ['N1','N2','N3','N4'] if pd.notna(row.get(n))])}")
+                
                 col1, col2 = st.columns(2)
                 col1.success(f"**IVAN:** {row.get('Int_IVAN','')}")
                 col2.info(f"**TRAD:** {row.get('Int_TRAD','')}")
                 
+                # Generar scroll de imágenes
                 h_items = ""
-                for i in range(1, 10):
-                    v = str(row.get(f'Diagrama{i}', 'nan'))
+                for j in range(1, 10):
+                    v = str(row.get(f'Diagrama{j}', 'nan'))
                     if v.lower().endswith('.png'):
                         url = f"{GITHUB_BASE}/{str(row['Naturaleza']).replace(' ', '%20')}/{v.split('/')[-1]}"
-                        h_items += f'<div style="flex:0 0 auto; text-align:center;"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{i}</p></div>'
+                        h_items += f'<div style="flex:0 0 auto; text-align:center;"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
                 
                 st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
