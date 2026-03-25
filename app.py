@@ -1,4 +1,3 @@
 import streamlit as st
-
-st.write("Hola! Si podés leer esto, la app está funcionando.")
-st.write("Versión de Streamlit:", st.__version__)
+st.title("Prueba de Funcionamiento")
+st.write("Si podés ver este mensaje, el servidor está OK.")
