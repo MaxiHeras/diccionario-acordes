@@ -8,42 +8,23 @@ import urllib.parse
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
-# CSS: ULTRA-VELOCIDAD EN BOTONES Y DISEÑO MÓVIL
+# CSS: VELOCIDAD Y DISEÑO MÓVIL
 st.markdown("""
     <style>
     @media (prefers-color-scheme: dark) { .chord-img-web { filter: invert(1) hue-rotate(180deg); } }
     .scroll-container { display: flex; overflow-x: auto; gap: 15px; padding: 10px 0; }
     .chord-img-web { width: 150px; height: auto; display: block; margin: 0 auto; }
     
-    /* FUERZA 3 COLUMNAS EN MÓVIL */
-    [data-testid="stHorizontalBlock"] {
-        display: flex !important;
-        flex-direction: row !important;
-        flex-wrap: wrap !important;
-        gap: 4px !important;
-    }
-    [data-testid="column"] {
-        width: 31% !important;
-        flex: 1 1 31% !important;
-        min-width: 31% !important;
-    }
+    [data-testid="stHorizontalBlock"] { display: flex !important; flex-direction: row !important; flex-wrap: wrap !important; gap: 4px !important; }
+    [data-testid="column"] { width: 31% !important; flex: 1 1 31% !important; min-width: 31% !important; }
 
-    /* ANIMACIÓN ULTRA-RÁPIDA */
     .stButton > button {
         width: 100% !important;
         padding: 5px 2px !important;
         font-size: 13px !important;
         min-height: 42px !important;
         border-radius: 6px !important;
-        /* ELIMINAMOS TODA TRANSICIÓN PARA PINTADO INSTANTÁNEO */
         transition: none !important; 
-        animation: none !important;
-    }
-    
-    /* Efecto de presión inmediata */
-    .stButton > button:active {
-        transform: scale(0.98) !important;
-        border-color: #ff4b4b !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -63,14 +44,13 @@ def load():
 
 if "seleccionados" not in st.session_state: st.session_state.seleccionados = []
 if "notas_inversas" not in st.session_state: st.session_state.notas_inversas = set()
+if "pdf_data" not in st.session_state: st.session_state.pdf_data = None
 
 def seleccionar_todo(opciones): st.session_state.seleccionados = opciones
 def limpiar_todo(): st.session_state.seleccionados = []
 def toggle_nota(nota):
-    if nota in st.session_state.notas_inversas:
-        st.session_state.notas_inversas.remove(nota)
-    else:
-        st.session_state.notas_inversas.add(nota)
+    if nota in st.session_state.notas_inversas: st.session_state.notas_inversas.remove(nota)
+    else: st.session_state.notas_inversas.add(nota)
 
 # 3. MOTOR PDF
 class PDF_Final(FPDF):
@@ -125,20 +105,34 @@ if df is not None:
             if "ultima_raiz_control" not in st.session_state or st.session_state.ultima_raiz_control != raiz_sel:
                 st.session_state.ultima_raiz_control = raiz_sel
                 st.session_state.seleccionados = opciones
-            
+                st.session_state.pdf_data = None # Resetear PDF al cambiar de nota
+
             st.multiselect("Tipo:", opciones, key="seleccionados")
             c1, c2 = st.columns(2)
             c1.button("Todo", on_click=seleccionar_todo, args=(opciones,), use_container_width=True)
             c2.button("Limpiar", on_click=limpiar_todo, use_container_width=True)
             
             st.write("")
+            # PROCESO DE PDF SIN RECUADROS
+            placeholder = st.empty()
             if st.button("📥 Generar PDF de Selección", use_container_width=True):
                 df_para_pdf = df_raiz[df_raiz['Naturaleza'].isin(st.session_state.seleccionados)]
                 if not df_para_pdf.empty:
-                    with st.status("Preparando PDF...", expanded=False) as s:
-                        pdf_bytes = generar_pdf(df_para_pdf)
-                        s.update(label="¡Listo!", state="complete")
-                    st.download_button("💾 Descargar Archivo", data=bytes(pdf_bytes), file_name=f"Acordes_{raiz_sel}.pdf", use_container_width=True)
+                    placeholder.markdown("⏳ *Preparando PDF...*")
+                    st.session_state.pdf_data = generar_pdf(df_para_pdf)
+                    placeholder.markdown("✅ *¡Listo!*")
+                else:
+                    st.warning("Seleccioná acordes primero.")
+
+            # BOTÓN DE DESCARGA (Fuera del proceso para que sea persistente)
+            if st.session_state.pdf_data:
+                st.download_button(
+                    label="💾 Guardar Archivo",
+                    data=bytes(st.session_state.pdf_data),
+                    file_name=f"Acordes_{raiz_sel}.pdf",
+                    use_container_width=True,
+                    type="primary"
+                )
 
             st.write("---")
             st.write("📲 **Compartir App**")
@@ -157,13 +151,12 @@ if df is not None:
                         if cols[j].button(n, key=f"id_{n}", type="primary" if is_active else "secondary"):
                             toggle_nota(n)
                             st.rerun()
-
             st.write("")
             if st.button("🗑️ Borrar Notas", use_container_width=True):
                 st.session_state.notas_inversas = set()
                 st.rerun()
 
-    # --- PANTALLA PRINCIPAL ---
+    # --- RENDERIZADO PRINCIPAL ---
     if modo == "Diccionario 📖":
         if st.session_state.seleccionados:
             tabs_ordenados = [t for t in orden_tipos if t in st.session_state.seleccionados]
@@ -187,7 +180,6 @@ if df is not None:
     else: # MODO IDENTIFICADOR
         seleccion = st.session_state.notas_inversas
         if seleccion:
-            st.subheader(f"Buscando: {' - '.join(sorted(list(seleccion)))}")
             res = df[df.apply(lambda r: seleccion == {str(r[n]) for n in ['N1','N2','N3','N4'] if pd.notna(r[n])}, axis=1)]
             if not res.empty:
                 for _, row in res.iterrows():
@@ -200,5 +192,3 @@ if df is not None:
                                 url = f"{GITHUB_BASE}/{str(row['Naturaleza']).replace(' ', '%20')}/{v.split('/')[-1]}"
                                 h_items += f'<div style="flex:0 0 auto; text-align:center;"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
                         st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
-            else:
-                st.warning("Sin coincidencias.")
