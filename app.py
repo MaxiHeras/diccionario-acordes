@@ -1,11 +1,8 @@
 import streamlit as st
 import pandas as pd
 
-# 1. CONFIGURACIÓN Y ESTILO
-if 'sb_state' not in st.session_state:
-    st.session_state.sb_state = "expanded"
-
-st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state=st.session_state.sb_state)
+# 1. CONFIGURACIÓN
+st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown("""
     <style>
@@ -31,44 +28,34 @@ def load():
 df = load()
 
 if df is not None:
-    # 3. BARRA LATERAL
+    # 3. BARRA LATERAL (Sin botón, ahora es automática)
     with st.sidebar:
         st.header("🔍 Buscar Acorde")
         notas_orden = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B']
         r_list = [n for n in notas_orden if n in df['Raiz'].unique()]
-        
         raiz_sel = st.selectbox("Nota Raíz:", r_list)
         
-        # LÓGICA DE SELECCIÓN POR DEFECTO:
         df_raiz = df[df['Raiz'] == raiz_sel]
-        opciones_nat = df_raiz['Naturaleza'].unique().tolist()
-        
-        # El multiselect ahora tiene 'default=opciones_nat' para marcar todos automáticamente
-        nat_sel = st.multiselect("Tipo:", options=opciones_nat, default=opciones_nat)
+        # Al quitar el botón, los resultados se actualizan cada vez que cambias esto
+        nat_sel = st.multiselect("Tipo:", options=df_raiz['Naturaleza'].unique())
         
         st.write("---")
         st.image(URL_QR, caption="Escanear para compartir", width=180)
         st.caption(f"**Enlace de la App:**")
         st.code(APP_URL, language=None)
-        
-        if st.button("Mostrar acordes", use_container_width=True, type="primary"):
-            if nat_sel:
-                st.session_state.sb_state = "collapsed"
-                st.rerun()
 
     # 4. RESULTADOS
     if nat_sel:
-        st.session_state.sb_state = "collapsed"
         df_f = df_raiz[df_raiz['Naturaleza'].isin(nat_sel)]
+        esta_expandido = False if len(nat_sel) > 1 else True
         
-        # Forzamos que todas las pestañas estén contraídas (expanded=False)
         for idx, row in df_f.iterrows():
-            with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=False):
+            with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=esta_expandido):
                 # NOTAS
                 notas = [str(row[c]).strip() for c in ['N1','N2','N3','N4'] if pd.notna(row.get(c)) and str(row[c]).lower() not in ['nan','','0']]
                 st.write(f"**Notas:** {' - '.join(notas)}")
                 
-                # INTERVALOS ESPECÍFICOS
+                # INTERVALOS (Iván y Tradicional)
                 col1, col2 = st.columns(2)
                 with col1:
                     ivan = str(row.get('Int_IVAN', '')).strip()
@@ -98,6 +85,6 @@ if df is not None:
                 else:
                     st.warning("No hay diagramas disponibles.")
     else:
-        st.info("Elegí un acorde en el menú lateral.")
+        st.info("Elegí un acorde en el menú lateral para empezar.")
 else:
     st.error("Error al cargar el Excel.")
