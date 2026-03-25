@@ -32,7 +32,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # 2. CARGA DE DATOS
-APP_URL = "https://diccionario-acordes-gpblssuywitmaglkwvdqde.streamlit.app/"
+APP_URL = "https://diccionario-acordes-xz99pzx875gw2ytzpqxacv.streamlit.app/"
 URL_EXCEL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
 URL_QR = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={APP_URL}"
 GITHUB_BASE = "https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main"
