@@ -8,13 +8,17 @@ import urllib.parse
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
-# CSS: VELOCIDAD Y DISEÑO MÓVIL
+# CSS: VELOCIDAD, DISEÑO MÓVIL Y SEPARACIÓN DE MODOS
 st.markdown("""
     <style>
     @media (prefers-color-scheme: dark) { .chord-img-web { filter: invert(1) hue-rotate(180deg); } }
     .scroll-container { display: flex; overflow-x: auto; gap: 15px; padding: 10px 0; }
     .chord-img-web { width: 150px; height: auto; display: block; margin: 0 auto; }
     
+    /* ESPACIADO PARA EL SELECTOR DE MODO */
+    [data-testid="stWidgetLabel"] p { margin-bottom: 15px !important; font-weight: bold; }
+    div[data-testid="stRadio"] > div { gap: 20px !important; padding: 10px 0; }
+
     [data-testid="stHorizontalBlock"] { display: flex !important; flex-direction: row !important; flex-wrap: wrap !important; gap: 4px !important; }
     [data-testid="column"] { width: 31% !important; flex: 1 1 31% !important; min-width: 31% !important; }
 
@@ -94,7 +98,9 @@ if df is not None:
     orden_tipos = ["MAYOR", "MENOR", "DOMINANTE", "AUMENTADO", "DISMINUIDO", "SEMIDISMINUIDO", "MAJ7", "MENOR7"]
     
     with st.sidebar:
-        modo = st.radio("Modo:", ["Diccionario 📖", "Identificador 🔍"])
+        # SECCIÓN MODO CON MÁS ESPACIO
+        st.subheader("Seleccionar Modo")
+        modo = st.radio(" ", ["Diccionario 📖", "Identificador 🔍"], label_visibility="collapsed")
         st.write("---")
 
         if modo == "Diccionario 📖":
@@ -105,7 +111,7 @@ if df is not None:
             if "ultima_raiz_control" not in st.session_state or st.session_state.ultima_raiz_control != raiz_sel:
                 st.session_state.ultima_raiz_control = raiz_sel
                 st.session_state.seleccionados = opciones
-                st.session_state.pdf_data = None # Resetear PDF al cambiar de nota
+                st.session_state.pdf_data = None 
 
             st.multiselect("Tipo:", opciones, key="seleccionados")
             c1, c2 = st.columns(2)
@@ -113,23 +119,22 @@ if df is not None:
             c2.button("Limpiar", on_click=limpiar_todo, use_container_width=True)
             
             st.write("")
-            # PROCESO DE PDF SIN RECUADROS
             placeholder = st.empty()
             if st.button("📥 Generar PDF de Selección", use_container_width=True):
                 df_para_pdf = df_raiz[df_raiz['Naturaleza'].isin(st.session_state.seleccionados)]
                 if not df_para_pdf.empty:
                     placeholder.markdown("⏳ *Preparando PDF...*")
                     st.session_state.pdf_data = generar_pdf(df_para_pdf)
-                    placeholder.markdown("✅ *¡Listo!*")
+                    placeholder.markdown("✅ *¡Listo para guardar!*")
                 else:
                     st.warning("Seleccioná acordes primero.")
 
-            # BOTÓN DE DESCARGA (Fuera del proceso para que sea persistente)
             if st.session_state.pdf_data:
                 st.download_button(
-                    label="💾 Guardar Archivo",
+                    label="💾 GUARDAR ARCHIVO",
                     data=bytes(st.session_state.pdf_data),
                     file_name=f"Acordes_{raiz_sel}.pdf",
+                    mime="application/pdf", # IMPORTANTE: Ayuda al móvil a identificar el archivo
                     use_container_width=True,
                     type="primary"
                 )
@@ -156,7 +161,7 @@ if df is not None:
                 st.session_state.notas_inversas = set()
                 st.rerun()
 
-    # --- RENDERIZADO PRINCIPAL ---
+    # --- PANTALLA PRINCIPAL ---
     if modo == "Diccionario 📖":
         if st.session_state.seleccionados:
             tabs_ordenados = [t for t in orden_tipos if t in st.session_state.seleccionados]
