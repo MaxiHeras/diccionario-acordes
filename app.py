@@ -7,7 +7,7 @@ from io import BytesIO
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
-# Estilos CSS - CUADRÍCULA PROFESIONAL
+# CSS AGRESIVO PARA FORZAR COLUMNAS EN CELULAR
 st.markdown("""
     <style>
     @media (prefers-color-scheme: dark) { .chord-img-web { filter: invert(1) hue-rotate(180deg); } }
@@ -15,28 +15,23 @@ st.markdown("""
     div.stDownloadButton > button { width: 100% !important; border: 1px solid #ff4b4b; }
     .chord-img-web { width: 150px; height: auto; display: block; margin: 0 auto; }
     
-    /* Estilo para los botones tipo Piano/Grid */
-    .nota-grid {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 8px;
-        margin-bottom: 20px;
+    /* ESTE BLOQUE FUERZA LAS 3 COLUMNAS EN EL CELULAR */
+    [data-testid="column"] {
+        width: 33.33% !important;
+        flex: 0 0 33.33% !important;
+        min-width: 33.33% !important;
     }
-    .nota-btn {
-        padding: 10px;
-        text-align: center;
-        border: 1px solid #dcdfe3;
-        border-radius: 5px;
-        cursor: pointer;
-        background-color: transparent;
-        font-weight: bold;
-        transition: 0.2s;
+    
+    /* Ajuste de botones para que no se encimen */
+    .stButton > button {
+        margin-bottom: 2px !important;
+        padding: 5px 2px !important;
+        font-size: 14px !important;
     }
     </style>
 """, unsafe_allow_html=True)
 
 # 2. CARGA DE DATOS
-APP_URL = "https://diccionario-acordes-xz99pzx875gw2ytzpqacv.streamlit.app/"
 URL_EXCEL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
 GITHUB_BASE = "https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main"
 
@@ -57,7 +52,7 @@ def toggle_nota(nota):
     if nota in st.session_state.notas_inversas: st.session_state.notas_inversas.remove(nota)
     else: st.session_state.notas_inversas.add(nota)
 
-# Clase PDF (Mantenemos igual)
+# Clase PDF (Mantenemos igual para tus descargas)
 class PDF_Final(FPDF):
     def footer(self):
         self.set_y(-15)
@@ -73,9 +68,8 @@ def generar_pdf(dataframe_seleccionado):
         pdf.set_font("helvetica", "B", 24)
         pdf.cell(0, 20, f"{row['Raiz']} {row['Naturaleza']}", border=1, ln=True, align='C')
         pdf.ln(8) 
-        pdf.set_font("helvetica", "B", 11)
-        pdf.set_text_color(60, 60, 60)
         notas_str = [str(row.get(n,'')) for n in ['N1','N2','N3','N4'] if pd.notna(row.get(n))]
+        pdf.set_font("helvetica", "B", 11)
         pdf.write(5, f"Notas: {' - '.join(notas_str)}\n")
         pdf.write(5, f"Intervalos IVAN: {str(row.get('Int_IVAN', 'N/A'))}\n")
         pdf.write(5, f"Intervalos TRAD: {str(row.get('Int_TRAD', 'N/A'))}\n")
@@ -123,24 +117,23 @@ if df is not None:
         
         else:
             st.header("🔍 Identificador")
-            st.write("Selecciona notas:")
-            
-            # BOTONERA CORREGIDA: Usamos columnas de Streamlit pero sin forzar CSS roto
-            # Para que en celular se vea bien, usaremos columnas más anchas
-            cols = st.columns(3)
-            for i, nota in enumerate(notas_musicales):
-                # Determinamos si la nota está activa
-                activo = nota in st.session_state.notas_inversas
-                if cols[i % 3].button(nota, key=f"inv_{nota}", use_container_width=True, type="primary" if activo else "secondary"):
-                    toggle_nota(nota)
-                    st.rerun()
+            # Forzamos 3 columnas fijas con el CSS de arriba
+            for i in range(0, len(notas_musicales), 3):
+                cols = st.columns(3)
+                for j in range(3):
+                    if i + j < len(notas_musicales):
+                        n = notas_musicales[i + j]
+                        activo = n in st.session_state.notas_inversas
+                        if cols[j].button(n, key=f"inv_{n}", use_container_width=True, type="primary" if activo else "secondary"):
+                            toggle_nota(n)
+                            st.rerun()
             
             st.write("---")
             if st.button("Resetear notas", use_container_width=True):
                 st.session_state.notas_inversas = set()
                 st.rerun()
 
-    # VISUALIZACIÓN
+    # --- VISUALIZACIÓN ---
     if modo == "Diccionario 📖":
         if st.session_state.seleccionados:
             tabs_ordenados = [t for t in orden_tipos if t in st.session_state.seleccionados]
@@ -165,9 +158,9 @@ if df is not None:
                                 h_items += f'<div style="flex:0 0 auto; text-align:center;"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
                         st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
             
-            if st.button("📥 Generar PDF"):
+            if st.button("📥 Descargar PDF"):
                 pdf_bytes = generar_pdf(df_raiz[df_raiz['Naturaleza'].isin(st.session_state.seleccionados)])
-                st.download_button("Descargar", data=bytes(pdf_bytes), file_name=f"Acordes_{raiz_sel}.pdf")
+                st.download_button("Click aquí para descargar", data=bytes(pdf_bytes), file_name=f"Acordes_{raiz_sel}.pdf")
 
     else: # MODO IDENTIFICADOR
         seleccion = st.session_state.notas_inversas
@@ -180,9 +173,9 @@ if df is not None:
             if not res.empty:
                 for _, row in res.iterrows():
                     with st.expander(f"✅ {row['Raiz']} {row['Naturaleza']}", expanded=True):
-                        col1, col2 = st.columns(2)
-                        col1.success(f"**IVAN:** {row.get('Int_IVAN','')}")
-                        col2.info(f"**TRAD:** {row.get('Int_TRAD','')}")
+                        # Aquí NO usamos columnas para los resultados, para que se vea bien en celular
+                        st.success(f"**IVAN:** {row.get('Int_IVAN','')}")
+                        st.info(f"**TRAD:** {row.get('Int_TRAD','')}")
                         h_items = ""
                         for j in range(1, 10):
                             v = str(row.get(f'Diagrama{j}', 'nan'))
@@ -190,4 +183,4 @@ if df is not None:
                                 url = f"{GITHUB_BASE}/{str(row['Naturaleza']).replace(' ', '%20')}/{v.split('/')[-1]}"
                                 h_items += f'<div style="flex:0 0 auto; text-align:center;"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
                         st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
-            else: st.warning("No hay coincidencias.")
+            else: st.warning("No se encontró coincidencia exacta.")
