@@ -36,9 +36,15 @@ if df is not None:
         st.header("🔍 Buscar Acorde")
         notas_orden = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B']
         r_list = [n for n in notas_orden if n in df['Raiz'].unique()]
+        
         raiz_sel = st.selectbox("Nota Raíz:", r_list)
+        
+        # LÓGICA DE SELECCIÓN POR DEFECTO:
         df_raiz = df[df['Raiz'] == raiz_sel]
-        nat_sel = st.multiselect("Tipo:", options=df_raiz['Naturaleza'].unique())
+        opciones_nat = df_raiz['Naturaleza'].unique().tolist()
+        
+        # El multiselect ahora tiene 'default=opciones_nat' para marcar todos automáticamente
+        nat_sel = st.multiselect("Tipo:", options=opciones_nat, default=opciones_nat)
         
         st.write("---")
         st.image(URL_QR, caption="Escanear para compartir", width=180)
@@ -55,26 +61,20 @@ if df is not None:
         st.session_state.sb_state = "collapsed"
         df_f = df_raiz[df_raiz['Naturaleza'].isin(nat_sel)]
         
-        # Pestañas contraídas si hay más de un tipo
-        esta_expandido = False if len(nat_sel) > 1 else True
-        
+        # Forzamos que todas las pestañas estén contraídas (expanded=False)
         for idx, row in df_f.iterrows():
-            with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=esta_expandido):
+            with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=False):
                 # NOTAS
                 notas = [str(row[c]).strip() for c in ['N1','N2','N3','N4'] if pd.notna(row.get(c)) and str(row[c]).lower() not in ['nan','','0']]
                 st.write(f"**Notas:** {' - '.join(notas)}")
                 
-                # INTERVALOS ESPECÍFICOS (Restaurados)
+                # INTERVALOS ESPECÍFICOS
                 col1, col2 = st.columns(2)
-                
                 with col1:
-                    # Mostrar Int_IVAN
                     ivan = str(row.get('Int_IVAN', '')).strip()
                     if ivan and ivan.lower() not in ['nan', '0', '']:
                         st.info(f"**Int_IVAN:**\n\n{ivan}")
-                
                 with col2:
-                    # Mostrar Int_TRAD
                     trad = str(row.get('Int_TRAD', '')).strip()
                     if trad and trad.lower() not in ['nan', '0', '']:
                         st.success(f"**Int_TRAD:**\n\n{trad}")
