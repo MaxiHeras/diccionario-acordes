@@ -1,6 +1,3 @@
-streamlit==1.31.1
-pandas
-pip install fpdf2 requests
 streamlit
 pandas
 fpdf2
