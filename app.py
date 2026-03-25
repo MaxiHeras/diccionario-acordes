@@ -7,17 +7,15 @@ from io import BytesIO
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
-# Estilos CSS para la Web
+# Estilos CSS corregidos para altura de recuadros
 st.markdown("""
     <style>
     @media (prefers-color-scheme: dark) { .chord-img { filter: invert(1) hue-rotate(180deg); } }
-    .scroll-container { display: flex; overflow-x: auto; gap: 15px; padding: 10px 0; -webkit-overflow-scrolling: touch; }
-    .chord-item { flex: 0 0 auto; text-align: center; }
+    .scroll-container { display: flex; overflow-x: auto; gap: 15px; padding: 10px 0; }
     .notas-web { font-size: 20px; font-weight: bold; color: #31333F; margin-bottom: 10px; }
-    
-    /* AJUSTE DE ALTURA PARA RECUADROS DE INTERVALOS */
-    div[data-testid="stNotificationContent"] { padding: 0px 10px !markdown; }
+    /* Reducción agresiva de altura en recuadros de intervalos */
     div[data-testid="stNotification"] { padding: 5px 10px; min-height: 0px; }
+    div[data-testid="stNotification"] div { line-height: 1.2; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -35,52 +33,47 @@ def load():
         return df
     except: return None
 
-# --- FUNCIÓN PDF CON MARCA DE AGUA EN EL PIE ---
+# --- FUNCIÓN PDF CORREGIDA ---
 def generar_pdf(dataframe_seleccionado):
     pdf = FPDF(orientation='P', unit='mm', format='A4')
-    pdf.set_auto_page_break(auto=True, margin=20) # Margen inferior para el pie
+    pdf.set_auto_page_break(auto=True, margin=20)
     
     for _, row in dataframe_seleccionado.iterrows():
         pdf.add_page()
         
         # TÍTULO (24pt)
         pdf.set_font("Helvetica", "B", 24)
-        pdf.set_text_color(0, 0, 0) 
         pdf.cell(0, 20, f"{row['Raiz']} {row['Naturaleza']}", border=1, ln=True, align='C')
         pdf.ln(8) 
         
-        # CONTENIDO (Notas: 11pt, Marca de agua: 13pt)
+        # CONTENIDO (Notas 11pt)
         pdf.set_text_color(60, 60, 60)
-        alt_linea = 5
         
-        # Notas
         pdf.set_font("Helvetica", "B", 11)
-        pdf.write(alt_linea, "Notas: ")
+        pdf.write(5, "Notas: ")
         pdf.set_font("Helvetica", "", 11)
         notas_list = [str(row[c]).strip() for c in ['N1','N2','N3','N4'] if c in row and pd.notna(row[c])]
-        pdf.write(alt_linea, f"{' - '.join(notas_list)}\n")
-        pdf.ln(2)
-
-        # Intervalos
-        pdf.set_font("Helvetica", "B", 11)
-        pdf.write(alt_linea, "Intervalos IVAN: ")
-        pdf.set_font("Helvetica", "", 11)
-        pdf.write(alt_linea, f"{str(row.get('Int_IVAN', 'N/A'))}\n")
+        pdf.write(5, f"{' - '.join(notas_list)}\n")
         pdf.ln(2)
 
         pdf.set_font("Helvetica", "B", 11)
-        pdf.write(alt_linea, "Intervalos TRAD: ")
+        pdf.write(5, "Intervalos IVAN: ")
         pdf.set_font("Helvetica", "", 11)
-        pdf.write(alt_linea, f"{str(row.get('Int_TRAD', 'N/A'))}\n")
+        pdf.write(5, f"{str(row.get('Int_IVAN', 'N/A'))}\n")
+        pdf.ln(2)
+
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.write(5, "Intervalos TRAD: ")
+        pdf.set_font("Helvetica", "", 11)
+        pdf.write(5, f"{str(row.get('Int_TRAD', 'N/A'))}\n")
         
-        # ESPACIO SIMÉTRICO
         GAP_SIMETRICO = 12 
         pdf.ln(GAP_SIMETRICO) 
 
         # CUADRÍCULA
         X_START, GAP_X, COLS = 15, 5, 4
         DIAG_WIDTH, DIAG_HEIGHT, TEXT_Px_HEIGHT = 38, 45, 5
-        y_inicial_bloque = pdf.get_y()
+        y_inicial = pdf.get_y()
         count = 0
         
         for i in range(1, 10):
@@ -91,26 +84,27 @@ def generar_pdf(dataframe_seleccionado):
                     img_data = requests.get(url_img, timeout=5).content
                     img_buffer = BytesIO(img_data)
                     col, fila = count % COLS, count // COLS
-                    if col == 0 and fila > 0:
-                        y_inicial_bloque += (DIAG_HEIGHT + TEXT_Px_HEIGHT + GAP_SIMETRICO)
+                    pos_y = y_inicial + (fila * (DIAG_HEIGHT + TEXT_Px_HEIGHT + 5))
                     pos_x = X_START + (col * (DIAG_WIDTH + GAP_X))
-                    if y_inicial_bloque + DIAG_HEIGHT + 15 > 275: # Espacio para la marca de agua
+                    
+                    if pos_y + DIAG_HEIGHT > 270: # Evitar pisar la marca de agua
                         pdf.add_page()
-                        y_inicial_bloque = 20
-                        pos_x = X_START + (col * (DIAG_WIDTH + GAP_X))
-                    pdf.image(img_buffer, x=pos_x, y=y_inicial_bloque, w=DIAG_WIDTH, h=DIAG_HEIGHT)
-                    pdf.set_xy(pos_x, y_inicial_bloque + DIAG_HEIGHT + 1)
+                        y_inicial = 20
+                        pos_y = y_inicial
+                    
+                    pdf.image(img_buffer, x=pos_x, y=pos_y, w=DIAG_WIDTH, h=DIAG_HEIGHT)
+                    pdf.set_xy(pos_x, pos_y + DIAG_HEIGHT + 1)
                     pdf.set_font("Helvetica", "", 9)
                     pdf.set_text_color(128, 128, 128)
-                    pdf.cell(DIAG_WIDTH, TEXT_Px_HEIGHT, f"P{i}", border=0, ln=False, align='C')
+                    pdf.cell(DIAG_WIDTH, TEXT_Px_HEIGHT, f"P{i}", align='C')
                     count += 1
                 except: continue
         
-        # MARCA DE AGUA EN EL PIE (11pt + 2pt = 13pt)
-        pdf.set_y(-15) # 15mm desde el final
+        # MARCA DE AGUA (Inferior Derecho, 13pt)
+        pdf.set_y(-15)
         pdf.set_font("Helvetica", "B", 13)
-        pdf.set_text_color(200, 200, 200) # Gris suave para no distraer
-        pdf.cell(0, 10, "Maxi Heras - Tucumán", ln=False, align='C')
+        pdf.set_text_color(180, 180, 180)
+        pdf.cell(0, 10, "Maxi Heras - Tucumán", align='R')
         
     return pdf.output()
 
@@ -121,71 +115,69 @@ if df is not None:
     
     with st.sidebar:
         st.header("🔍 Buscar Acorde")
-        notas_orden = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B']
-        r_list = [n for n in notas_orden if n in df['Raiz'].unique()]
+        r_list = sorted(df['Raiz'].unique())
         
-        if "raiz_anterior" not in st.session_state: st.session_state.raiz_anterior = r_list[0]
+        if "raiz_ant" not in st.session_state: st.session_state.raiz_ant = r_list[0]
         raiz_sel = st.selectbox("Nota Raíz:", r_list)
+        
         df_raiz = df[df['Raiz'] == raiz_sel]
         tipos_reales = df_raiz['Naturaleza'].unique()
-        opciones_finales = [t for t in orden_deseado if t in tipos_reales] + sorted([t for t in tipos_reales if t not in orden_deseado])
+        opciones = [t for t in orden_deseado if t in tipos_reales] + sorted([t for t in tipos_reales if t not in orden_deseado])
 
-        if raiz_sel != st.session_state.raiz_anterior:
-            st.session_state.seleccionados = opciones_finales
-            st.session_state.raiz_anterior = raiz_sel
-            if "ms_key" not in st.session_state: st.session_state.ms_key = 0
-            st.session_state.ms_key += 1
+        if raiz_sel != st.session_state.raiz_ant:
+            st.session_state.seleccionados = opciones
+            st.session_state.raiz_ant = raiz_sel
+            if "key" not in st.session_state: st.session_state.key = 0
+            st.session_state.key += 1
             st.rerun()
 
-        if 'ms_key' not in st.session_state: st.session_state.ms_key = 0
-        if 'seleccionados' not in st.session_state: st.session_state.seleccionados = opciones_finales
-        nat_sel = st.multiselect("Tipo:", options=opciones_finales, default=st.session_state.seleccionados, key=f"ms_{st.session_state.ms_key}")
+        if 'seleccionados' not in st.session_state: st.session_state.seleccionados = opciones
+        nat_sel = st.multiselect("Tipo:", options=opciones, default=st.session_state.seleccionados, key=f"ms_{st.session_state.get('key', 0)}")
 
-        col1, col2 = st.columns(2)
-        if col1.button("Todo", use_container_width=True):
-            st.session_state.seleccionados = opciones_finales
-            st.session_state.ms_key += 1
+        c1, c2 = st.columns(2)
+        if c1.button("Todo", use_container_width=True):
+            st.session_state.seleccionados = opciones
+            st.session_state.key = st.session_state.get('key', 0) + 1
             st.rerun()
-        if col2.button("Limpiar", use_container_width=True):
+        if c2.button("Limpiar", use_container_width=True):
             st.session_state.seleccionados = []
-            st.session_state.ms_key += 1
+            st.session_state.key = st.session_state.get('key', 0) + 1
             st.rerun()
 
         st.write("---")
         if nat_sel:
             if st.button("📥 Generar PDF", use_container_width=True):
-                with st.spinner("Preparando PDF..."):
-                    pdf_bytes = generar_pdf(df_raiz[df_raiz['Naturaleza'].isin(nat_sel)])
-                    st.download_button(label="🔥 Descargar PDF", data=bytes(pdf_bytes), file_name=f"Acordes_{raiz_sel}.pdf", mime="application/pdf", use_container_width=True)
+                pdf_bytes = generar_pdf(df_raiz[df_raiz['Naturaleza'].isin(nat_sel)])
+                st.download_button("🔥 Descargar PDF", data=bytes(pdf_bytes), file_name=f"Acordes_{raiz_sel}.pdf", mime="application/pdf", use_container_width=True)
 
-        # RESTAURACIÓN DE QR Y URL
         st.write("---")
         st.image(URL_QR, caption="App Online", width=150)
-        st.caption(f"[Acceder a la App]({APP_URL})")
+        # URL en texto plano para copiar fácilmente
+        st.code(APP_URL, language=None)
 
+    # VISTA WEB
     if nat_sel:
-        debe_expandir = len(nat_sel) == 1
         df_f = df_raiz[df_raiz['Naturaleza'].isin(nat_sel)].copy()
-        df_f['Naturaleza'] = pd.Categorical(df_f['Naturaleza'], categories=opciones_finales, ordered=True)
+        df_f['Naturaleza'] = pd.Categorical(df_f['Naturaleza'], categories=opciones, ordered=True)
         df_f = df_f.sort_values('Naturaleza')
 
-        for idx, row in df_f.iterrows():
-            with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=debe_expandir):
-                notas_web = [str(row[c]).strip() for c in ['N1','N2','N3','N4'] if c in row and pd.notna(row[c])]
-                st.markdown(f'<p class="notas-web">Notas: {" - ".join(notas_web)}</p>', unsafe_allow_html=True)
+        for _, row in df_f.iterrows():
+            with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=(len(nat_sel)==1)):
+                notas = [str(row[c]).strip() for c in ['N1','N2','N3','N4'] if pd.notna(row[c])]
+                st.markdown(f'<p class="notas-web">Notas: {" - ".join(notas)}</p>', unsafe_allow_html=True)
                 
-                c1, c2 = st.columns(2)
-                ivan, trad = str(row.get('Int_IVAN', '')).strip(), str(row.get('Int_TRAD', '')).strip()
-                if ivan and ivan.lower() != 'nan': c1.success(f"**Intervalos IVAN:**\n\n{ivan}")
-                if trad and trad.lower() != 'nan': c2.info(f"**Intervalos TRAD:**\n\n{trad}")
+                col_i, col_t = st.columns(2)
+                ivan, trad = str(row.get('Int_IVAN','')), str(row.get('Int_TRAD',''))
+                if ivan.lower() != 'nan': col_i.success(f"**Intervalos IVAN:**\n\n{ivan}")
+                if trad.lower() != 'nan': col_t.info(f"**Intervalos TRAD:**\n\n{trad}")
                 
                 st.write("---")
                 h_items = ""
                 for i in range(1, 10):
-                    val = str(row.get(f'Diagrama{i}', 'nan')).strip()
-                    if val.lower().endswith('.png'):
-                        url_img = f"{GITHUB_BASE}/{str(row['Naturaleza']).replace(' ', '%20')}/{val.split('/')[-1]}"
-                        h_items += f'<div class="chord-item"><img src="{url_img}" class="chord-img" width="110"><p style="font-size:12px;color:gray;">P{i}</p></div>'
-                if h_items: st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
+                    v = str(row.get(f'Diagrama{i}', 'nan')).strip()
+                    if v.lower().endswith('.png'):
+                        url = f"{GITHUB_BASE}/{str(row['Naturaleza']).replace(' ', '%20')}/{v.split('/')[-1]}"
+                        h_items += f'<div style="flex:0 0 auto; text-align:center;"><img src="{url}" width="110"><p style="font-size:12px;color:gray;">P{i}</p></div>'
+                if h_items: st.markdown(f'<div class="scroll-container" style="display:flex; overflow-x:auto; gap:15px;">{h_items}</div>', unsafe_allow_html=True)
 else:
-    st.error("Error al cargar la base de datos.")
+    st.error("Base de datos no disponible.")
