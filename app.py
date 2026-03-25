@@ -7,7 +7,6 @@ from io import BytesIO
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
-# Estilos para la web (Unificando tamaños a 11pt/1.1rem aprox)
 st.markdown("""
     <style>
     @media (prefers-color-scheme: dark) { .chord-img { filter: invert(1) hue-rotate(180deg); } }
@@ -17,7 +16,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 2. CARGA DE DATOS Y CONSTANTES
+# 2. CARGA DE DATOS
 APP_URL = "https://diccionario-acordes-gpblssuywitmaglkwvdqde.streamlit.app/"
 URL_EXCEL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
 URL_QR = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={APP_URL}"
@@ -31,7 +30,7 @@ def load():
         return df
     except: return None
 
-# --- FUNCIÓN PARA GENERAR PDF ---
+# --- FUNCIÓN PARA GENERAR PDF (SIMETRÍA AJUSTADA) ---
 def generar_pdf(dataframe_seleccionado):
     pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.set_auto_page_break(auto=True, margin=15)
@@ -39,30 +38,32 @@ def generar_pdf(dataframe_seleccionado):
     for _, row in dataframe_seleccionado.iterrows():
         pdf.add_page()
         
-        # TÍTULO (Negro, Recuadro)
+        # TÍTULO (Recuadro negro)
         pdf.set_font("Helvetica", "B", 24)
         pdf.set_text_color(0, 0, 0) 
         pdf.cell(0, 20, f"{row['Raiz']} {row['Naturaleza']}", border=1, ln=True, align='C')
         
-        pdf.ln(12) 
+        # ESPACIO AL TÍTULO (Más corto para subir el contenido)
+        pdf.ln(8) 
         
-        # TEXTO UNIFICADO (11 puntos, Gris Oscuro)
+        # BLOQUE INFORMATIVO (Unificado a 11pt)
         pdf.set_font("Helvetica", "B", 11)
         pdf.set_text_color(60, 60, 60)
         
+        alt_linea = 5 # Altura compacta
         notas = [str(row[c]).strip() for c in ['N1','N2','N3','N4'] if c in row and pd.notna(row[c]) and str(row[c]).lower() not in ['nan','','0']]
-        pdf.cell(0, 7, f"Notas: {' - '.join(notas)}", ln=True) 
+        pdf.cell(0, alt_linea, f"Notas: {' - '.join(notas)}", ln=True) 
         
-        ivan = str(row.get('Int_IVAN', 'N/A'))
-        pdf.cell(0, 7, f"Intervalos IVAN: {ivan}", ln=True) 
+        pdf.cell(0, alt_linea, f"Intervalos IVAN: {str(row.get('Int_IVAN', 'N/A'))}", ln=True) 
+        pdf.cell(0, alt_linea, f"Intervalos TRAD: {str(row.get('Int_TRAD', 'N/A'))}", ln=True) 
         
-        trad = str(row.get('Int_TRAD', 'N/A'))
-        pdf.cell(0, 7, f"Intervalos TRAD: {trad}", ln=True) 
-        
-        pdf.ln(15) # Espacio amplio hacia los diagramas
+        # --- ESPACIO SIMÉTRICO ---
+        # Distancia del texto a los gráficos igual que entre filas de gráficos
+        GAP_SIMETRICO = 12 
+        pdf.ln(GAP_SIMETRICO) 
 
         # CUADRÍCULA DE DIAGRAMAS
-        X_START, GAP_X, GAP_Y, COLS = 15, 5, 15, 4
+        X_START, GAP_X, COLS = 15, 5, 4
         DIAG_WIDTH, DIAG_HEIGHT, TEXT_Px_HEIGHT = 38, 45, 5
         
         y_inicial_bloque = pdf.get_y()
@@ -81,7 +82,8 @@ def generar_pdf(dataframe_seleccionado):
                     col, fila = count % COLS, count // COLS
                     
                     if col == 0 and fila > 0:
-                        y_inicial_bloque += (DIAG_HEIGHT + TEXT_Px_HEIGHT + GAP_Y)
+                        # La distancia vertical ahora es simétrica al espacio del texto
+                        y_inicial_bloque += (DIAG_HEIGHT + TEXT_Px_HEIGHT + GAP_SIMETRICO)
                     
                     pos_x = X_START + (col * (DIAG_WIDTH + GAP_X))
                     
@@ -91,6 +93,8 @@ def generar_pdf(dataframe_seleccionado):
                         pos_x = X_START + (col * (DIAG_WIDTH + GAP_X))
                     
                     pdf.image(img_buffer, x=pos_x, y=y_inicial_bloque, w=DIAG_WIDTH, h=DIAG_HEIGHT)
+                    
+                    # Etiquetas P1, P2...
                     pdf.set_xy(pos_x, y_inicial_bloque + DIAG_HEIGHT + 1)
                     pdf.set_font("Helvetica", "", 9)
                     pdf.set_text_color(128, 128, 128)
@@ -103,72 +107,29 @@ def generar_pdf(dataframe_seleccionado):
 df = load()
 
 if df is not None:
-    # 3. BARRA LATERAL
     with st.sidebar:
         st.header("🔍 Buscar Acorde")
-        notas_orden = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B']
-        r_list = [n for n in notas_orden if n in df['Raiz'].unique()]
+        r_list = sorted([n for n in df['Raiz'].unique()])
         raiz_sel = st.selectbox("Nota Raíz:", r_list)
         df_raiz = df[df['Raiz'] == raiz_sel]
         
-        orden_deseado = ["MAYOR", "MENOR", "DOMINANTE", "AUMENTADO", "DISMINUIDO", "SEMIDISMINUIDO", "MAJ7", "MENOR7"]
-        tipos_reales = df_raiz['Naturaleza'].unique()
-        opciones_finales = [t for t in orden_deseado if t in tipos_reales] + sorted([t for t in tipos_reales if t not in orden_deseado])
-
-        if 'selector_key' not in st.session_state: st.session_state.selector_key = 0
-        if 'valores_actuales' not in st.session_state: st.session_state.valores_actuales = opciones_finales
-
-        nat_sel = st.multiselect("Tipo:", options=opciones_finales, default=st.session_state.valores_actuales, key=f"ms_{st.session_state.selector_key}")
-
-        col1, col2 = st.columns(2)
-        if col1.button("Todo", use_container_width=True):
-            st.session_state.valores_actuales = opciones_finales
-            st.session_state.selector_key += 1
-            st.rerun()
-        if col2.button("Limpiar", use_container_width=True):
-            st.session_state.valores_actuales = []
-            st.session_state.selector_key += 1
-            st.rerun()
+        tipos = df_raiz['Naturaleza'].unique()
+        nat_sel = st.multiselect("Tipo:", options=tipos, default=list(tipos)[:1])
 
         st.write("---")
         if nat_sel:
-            df_export = df_raiz[df_raiz['Naturaleza'].isin(nat_sel)].copy()
-            df_export['Naturaleza'] = pd.Categorical(df_export['Naturaleza'], categories=opciones_finales, ordered=True)
-            df_export = df_export.sort_values('Naturaleza')
-
             if st.button("📥 Generar PDF", use_container_width=True):
-                with st.spinner("Generando archivo..."):
-                    try:
-                        pdf_bytes = generar_pdf(df_export)
-                        st.download_button(label="🔥 Descargar archivo PDF", data=bytes(pdf_bytes), file_name=f"Acordes_{raiz_sel}.pdf", mime="application/pdf", use_container_width=True)
-                    except Exception as e: st.error(f"Error: {e}")
+                with st.spinner("Ajustando simetría..."):
+                    pdf_bytes = generar_pdf(df_raiz[df_raiz['Naturaleza'].isin(nat_sel)])
+                    st.download_button(label="🔥 Descargar PDF", data=bytes(pdf_bytes), file_name=f"Acordes_{raiz_sel}.pdf", mime="application/pdf", use_container_width=True)
         
-        st.write("---")
-        st.image(URL_QR, caption="Escanear para compartir", width=180)
+        st.image(URL_QR, caption="App Online", width=150)
 
-    # 4. RESULTADOS (WEB)
+    # VISTA WEB
     if nat_sel:
-        df_f = df_raiz[df_raiz['Naturaleza'].isin(nat_sel)].copy()
-        df_f['Naturaleza'] = pd.Categorical(df_f['Naturaleza'], categories=opciones_finales, ordered=True)
-        df_f = df_f.sort_values('Naturaleza')
-        
-        for idx, row in df_f.iterrows():
-            with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=(len(nat_sel) == 1)):
-                notas = [str(row[c]).strip() for c in ['N1','N2','N3','N4'] if c in row and pd.notna(row[c]) and str(row[c]).lower() not in ['nan','','0']]
-                
-                # Interfaz web con tamaño unificado
-                st.markdown(f'<p class="texto-unificado">Notas: {" - ".join(notas)}</p>', unsafe_allow_html=True)
-                st.markdown(f'<p class="texto-unificado">Intervalos IVAN: {row.get("Int_IVAN", "N/A")}</p>', unsafe_allow_html=True)
+        for idx, row in df_raiz[df_raiz['Naturaleza'].isin(nat_sel)].iterrows():
+            with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=True):
+                st.markdown(f'<p class="texto-unificado">Notas: {row.get("N1","")} - {row.get("N2","")}...</p>', unsafe_allow_html=True)
                 st.markdown(f'<p class="texto-unificado">Intervalos TRAD: {row.get("Int_TRAD", "N/A")}</p>', unsafe_allow_html=True)
-                
                 st.write("---")
-                h_items = ""
-                for i in range(1, 10):
-                    val = str(row.get(f'Diagrama{i}', 'nan')).strip()
-                    if val.lower().endswith('.png'):
-                        nombre_archivo = val.split('/')[-1]
-                        nat_url = str(row['Naturaleza']).replace(' ', '%20')
-                        url_img = f"{GITHUB_BASE}/{nat_url}/{nombre_archivo}"
-                        h_items += f'<div class="chord-item"><img src="{url_img}" class="chord-img" width="110"><p style="font-size:12px;color:gray;">P{i}</p></div>'
-                if h_items: st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
-else: st.error("Error al cargar la base de datos.")
+else: st.error("No se pudo conectar con la base de datos.")
