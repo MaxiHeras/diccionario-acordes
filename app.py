@@ -8,11 +8,19 @@ import urllib.parse
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
-# CSS: AJUSTES VISUALES, COLORES Y GRILLA
+# CSS: AJUSTES DE POSICIÓN, ESPACIADO Y GRILLA
 st.markdown("""
     <style>
     @media (prefers-color-scheme: dark) { .chord-img-web { filter: invert(1) hue-rotate(180deg); } }
     
+    /* SUBE EL CONTENIDO AL TOQUE DE LA X */
+    [data-testid="stSidebarUserContent"] { padding-top: 0.5rem !important; }
+
+    /* SEPARACIÓN ENTRE DICCIONARIO E IDENTIFICADOR */
+    [data-testid="stSidebar"] [data-testid="stWidgetLabel"] + div { margin-top: 10px; }
+    [data-testid="stSidebar"] label[data-testid="stWidgetLabel"] { margin-bottom: 15px; }
+    div[data-testid="stRadio"] > div { gap: 15px; } /* Separa las opciones del radio */
+
     .scroll-container { 
         display: flex !important; 
         overflow-x: auto !important; 
@@ -60,11 +68,12 @@ def load():
         return df
     except: return None
 
-# Estados
+# Estados iniciales
 if "seleccionados" not in st.session_state: st.session_state.seleccionados = []
 if "notas_inversas" not in st.session_state: st.session_state.notas_inversas = set()
 if "pdf_data" not in st.session_state: st.session_state.pdf_data = None
 if "descargado" not in st.session_state: st.session_state.descargado = False
+if "modo_previo" not in st.session_state: st.session_state.modo_previo = "Diccionario 📖"
 
 def seleccionar_todo(opciones): st.session_state.seleccionados = opciones
 def limpiar_todo(): 
@@ -76,37 +85,24 @@ def toggle_nota(nota):
     if nota in st.session_state.notas_inversas: st.session_state.notas_inversas.remove(nota)
     else: st.session_state.notas_inversas.add(nota)
 
-# --- FUNCIÓN DE DETALLE CON COLORES (AZUL Y VERDE) ---
+# Función de detalle con colores
 def mostrar_detalle_acorde(row):
     st.markdown(f"### {row['Raiz']} {row['Naturaleza']}")
-    
-    # Notas
     lista_n = [str(row.get(n,'')) for n in ['N1','N2','N3','N4'] if pd.notna(row.get(n))]
     st.write(f"**Notas:** {' - '.join(lista_n)}")
-    
-    # Intervalos con colores (IVAN: Azul, TRAD: Verde)
     c1, c2 = st.columns(2)
-    with c1:
-        st.info(f"**IVAN:** {row.get('Int_IVAN','N/A')}")
-    with c2:
-        st.success(f"**TRAD:** {row.get('Int_TRAD','N/A')}")
-    
+    with c1: st.info(f"**IVAN:** {row.get('Int_IVAN','N/A')}")
+    with c2: st.success(f"**TRAD:** {row.get('Int_TRAD','N/A')}")
     st.write("---")
     st.write("**Diagramas:**")
-    
-    # Diagramas con Scroll
     h_items = ""
     for j in range(1, 10):
         v = str(row.get(f'Diagrama{j}', 'nan')).strip()
         if v.lower().endswith('.png'):
-            naturaleza_cod = urllib.parse.quote(str(row['Naturaleza']))
-            url = f"{GITHUB_BASE}/{naturaleza_cod}/{v.split('/')[-1]}"
+            nat_cod = urllib.parse.quote(str(row['Naturaleza']))
+            url = f"{GITHUB_BASE}/{nat_cod}/{v.split('/')[-1]}"
             h_items += f'<div class="chord-diag-item"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
-    
-    if h_items:
-        st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
-    else:
-        st.warning("No hay diagramas disponibles.")
+    if h_items: st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
 
 # 3. MOTOR PDF
 class PDF_Final(FPDF):
@@ -129,7 +125,6 @@ def generar_pdf(dataframe_seleccionado):
         pdf.write(5, f"Notas: {' - '.join(notas_str)}\n")
         pdf.write(5, f"IVAN: {str(row.get('Int_IVAN', 'N/A'))} | TRAD: {str(row.get('Int_TRAD', 'N/A'))}\n")
         pdf.ln(10)
-        
         X_START, GAP_X, COLS, DIAG_W, DIAG_H = 15, 5, 4, 38, 45
         y_curr, count = pdf.get_y(), 0
         for i in range(1, 10):
@@ -157,11 +152,19 @@ if df is not None:
         modo = st.radio(" ", ["Diccionario 📖", "Identificador 🔍"], label_visibility="collapsed")
         st.write("---")
 
+        # Lógica para autoseleccionar todo al cambiar de IDENTIFICADOR a DICCIONARIO
+        if st.session_state.modo_previo == "Identificador 🔍" and modo == "Diccionario 📖":
+            df_c = df[df['Raiz'] == 'C']
+            st.session_state.seleccionados = [t for t in orden_tipos if t in df_c['Naturaleza'].unique()]
+            st.session_state.u_raiz = 'C'
+        st.session_state.modo_previo = modo
+
         if modo == "Diccionario 📖":
             raiz_sel = st.selectbox("Nota Raíz:", [n for n in notas_musicales if n in df['Raiz'].unique()])
             df_raiz = df[df['Raiz'] == raiz_sel]
             opciones = [t for t in orden_tipos if t in df_raiz['Naturaleza'].unique()]
             
+            # Autoseleccionar todo al cambiar nota manualmente
             if "u_raiz" not in st.session_state or st.session_state.u_raiz != raiz_sel:
                 st.session_state.u_raiz = raiz_sel
                 st.session_state.seleccionados = opciones
@@ -223,17 +226,12 @@ if df is not None:
                 with tab:
                     row = df_raiz[df_raiz['Naturaleza'] == tipos_visibles[i]].iloc[0]
                     mostrar_detalle_acorde(row)
-        else:
-            st.info("Seleccioná tipos en el sidebar.")
+        else: st.info("Seleccioná tipos en el sidebar.")
     else:
         st.header("Acorde Resultante:")
         notas_act = st.session_state.notas_inversas
         res = df[df.apply(lambda r: set([str(r[n]) for n in ['N1','N2','N3','N4'] if pd.notna(r[n])]) == notas_act, axis=1)]
-        
         if notas_act:
-            if not res.empty:
-                mostrar_detalle_acorde(res.iloc[0]) # Detalle completo en Identificador
-            else:
-                st.warning("Acorde no identificado.")
-        else:
-            st.info("Seleccioná notas en la barra lateral.")
+            if not res.empty: mostrar_detalle_acorde(res.iloc[0])
+            else: st.warning("Acorde no identificado.")
+        else: st.info("Seleccioná notas en la barra lateral.")
