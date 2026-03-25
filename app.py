@@ -7,7 +7,7 @@ from io import BytesIO
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
-# Estilos CSS - BOTONES PEQUEÑOS Y MODO OSCURO
+# Estilos CSS - FORZAR BOTONES PEQUEÑOS
 st.markdown("""
     <style>
     @media (prefers-color-scheme: dark) { .chord-img-web { filter: invert(1) hue-rotate(180deg); } }
@@ -15,11 +15,13 @@ st.markdown("""
     div.stDownloadButton > button { width: 100% !important; border: 1px solid #ff4b4b; }
     .chord-img-web { width: 150px; height: auto; display: block; margin: 0 auto; }
     
-    /* Ajuste para que los botones de notas no sean gigantes en el celular */
-    .stButton > button { 
-        padding: 5px 2px !important;
-        font-size: 14px !important;
-        min-height: 40px !important;
+    /* Botones del identificador: súper compactos para celular */
+    div[data-testid="column"] button {
+        padding: 2px 5px !important;
+        font-size: 12px !important;
+        height: 32px !important;
+        min-height: 32px !important;
+        line-height: 1 !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -99,7 +101,9 @@ def generar_pdf(dataframe_seleccionado):
 
 df = load()
 if df is not None:
+    # --- ORDEN MUSICAL REQUERIDO ---
     notas_musicales = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B']
+    orden_tipos = ["MAYOR", "MENOR", "DOMINANTE", "AUMENTADO", "DISMINUIDO", "SEMIDISMINUIDO", "MAJ7", "MENOR7"]
     
     with st.sidebar:
         modo = st.radio("Modo de uso:", ["Diccionario 📖", "Identificador 🔍"])
@@ -108,9 +112,11 @@ if df is not None:
         if modo == "Diccionario 📖":
             raiz_sel = st.selectbox("Nota Raíz:", [n for n in notas_musicales if n in df['Raiz'].unique()])
             df_raiz = df[df['Raiz'] == raiz_sel]
-            opciones = sorted(list(df_raiz['Naturaleza'].unique()))
             
-            # Lógica para seleccionar todos por defecto al cambiar de raíz
+            # Filtramos los tipos disponibles manteniendo el ORDEN MUSICAL
+            opciones_raiz = df_raiz['Naturaleza'].unique()
+            opciones = [t for t in orden_tipos if t in opciones_raiz]
+            
             if "ultima_raiz_control" not in st.session_state or st.session_state.ultima_raiz_control != raiz_sel:
                 st.session_state.ultima_raiz_control = raiz_sel
                 st.session_state.seleccionados = opciones
@@ -123,6 +129,7 @@ if df is not None:
         
         else:
             st.header("🔍 Identificador")
+            # Botonera compacta (3 columnas)
             for i in range(0, len(notas_musicales), 3):
                 cols = st.columns(3)
                 for j in range(3):
@@ -134,6 +141,7 @@ if df is not None:
                             toggle_nota(nota)
                             st.rerun()
             
+            st.write("---")
             if st.button("Resetear notas", use_container_width=True):
                 st.session_state.notas_inversas = set()
                 st.rerun()
@@ -141,11 +149,13 @@ if df is not None:
     # --- VISUALIZACIÓN ---
     if modo == "Diccionario 📖":
         if st.session_state.seleccionados:
-            tabs = st.tabs(st.session_state.seleccionados)
+            # Ordenamos las pestañas según tu orden musical
+            tabs_ordenados = [t for t in orden_tipos if t in st.session_state.seleccionados]
+            tabs = st.tabs(tabs_ordenados)
+            
             for i, tab in enumerate(tabs):
                 with tab:
-                    tipo_actual = st.session_state.seleccionados[i]
-                    # Asegurar que el filtro no rompa si cambia la raíz
+                    tipo_actual = tabs_ordenados[i]
                     res_filtro = df_raiz[df_raiz['Naturaleza'] == tipo_actual]
                     if not res_filtro.empty:
                         row = res_filtro.iloc[0]
@@ -166,27 +176,3 @@ if df is not None:
             if st.button("📥 Generar PDF"):
                 pdf_bytes = generar_pdf(df_raiz[df_raiz['Naturaleza'].isin(st.session_state.seleccionados)])
                 st.download_button("Descargar PDF", data=bytes(pdf_bytes), file_name=f"Acordes_{raiz_sel}.pdf")
-
-    else: # MODO IDENTIFICADOR
-        seleccion = st.session_state.notas_inversas
-        if seleccion:
-            st.write(f"**Buscando:** {' - '.join(sorted(list(seleccion)))}")
-            def coincide(row):
-                notas_row = {str(row[n]) for n in ['N1', 'N2', 'N3', 'N4'] if pd.notna(row[n])}
-                return seleccion == notas_row
-            res = df[df.apply(coincide, axis=1)]
-            if not res.empty:
-                for _, row in res.iterrows():
-                    with st.expander(f"✅ {row['Raiz']} {row['Naturaleza']}", expanded=True):
-                        col1, col2 = st.columns(2)
-                        col1.success(f"**IVAN:** {row.get('Int_IVAN','')}")
-                        col2.info(f"**TRAD:** {row.get('Int_TRAD','')}")
-                        h_items = ""
-                        for j in range(1, 10):
-                            v = str(row.get(f'Diagrama{j}', 'nan'))
-                            if v.lower().endswith('.png'):
-                                url = f"{GITHUB_BASE}/{str(row['Naturaleza']).replace(' ', '%20')}/{v.split('/')[-1]}"
-                                h_items += f'<div style="flex:0 0 auto; text-align:center;"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
-                        st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
-            else:
-                st.warning("No se encontró el acorde exacto.")
