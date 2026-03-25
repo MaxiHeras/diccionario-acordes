@@ -7,12 +7,16 @@ from io import BytesIO
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
-# Estilos CSS
+# Estilos CSS para botones y contenedores
 st.markdown("""
     <style>
     @media (prefers-color-scheme: dark) { .chord-img { filter: invert(1) hue-rotate(180deg); } }
     .scroll-container { display: flex; overflow-x: auto; gap: 15px; padding: 10px 0; }
-    .notas-web { font-size: 20px; font-weight: bold; color: #31333F; margin-bottom: 10px; }
+    /* Estilo para que el botón de descarga ocupe todo el ancho como el de Generar */
+    div.stDownloadButton > button {
+        width: 100% !important;
+        border: 1px solid #ff4b4b; /* Color similar al borde de Generar PDF */
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -82,25 +86,39 @@ if df is not None:
         st.header("🔍 Buscar Acorde")
         r_list = [n for n in orden_notas if n in df['Raiz'].unique()]
         raiz_sel = st.selectbox("Nota Raíz:", r_list)
+        
         df_raiz = df[df['Raiz'] == raiz_sel]
         opciones = [t for t in orden_tipos if t in df_raiz['Naturaleza'].unique()]
         
-        if 'sel' not in st.session_state: st.session_state.sel = opciones
-        
-        # Botones Todo / Limpiar
+        # Lógica para reiniciar selección al cambiar de nota raíz
+        if "ultima_raiz" not in st.session_state or st.session_state.ultima_raiz != raiz_sel:
+            st.session_state.ultima_raiz = raiz_sel
+            st.session_state.seleccionados = opciones
+
+        # Multiselect primero
+        nat_sel = st.multiselect("Tipo:", opciones, key="seleccionados")
+
+        # Botones Todo / Limpiar debajo del multiselect
         c1, c2 = st.columns(2)
-        if c1.button("Todo"): st.session_state.sel = opciones
-        if c2.button("Limpiar"): st.session_state.sel = []
+        if c1.button("Todo", use_container_width=True):
+            st.session_state.seleccionados = opciones
+            st.rerun()
+        if c2.button("Limpiar", use_container_width=True):
+            st.session_state.seleccionados = []
+            st.rerun()
         
-        nat_sel = st.multiselect("Tipo:", opciones, key="sel")
+        st.write("---")
 
         if st.button("📥 Generar PDF", use_container_width=True):
-            with st.spinner("Generando..."):
-                pdf_bytes = generar_pdf(df_raiz[df_raiz['Naturaleza'].isin(nat_sel)])
-                st.download_button("🔥 Descargar", data=bytes(pdf_bytes), file_name=f"Acordes_{raiz_sel}.pdf", mime="application/pdf")
+            if not nat_sel:
+                st.warning("Selecciona al menos un tipo de acorde.")
+            else:
+                with st.spinner("Generando..."):
+                    pdf_bytes = generar_pdf(df_raiz[df_raiz['Naturaleza'].isin(nat_sel)])
+                    # Botón de descarga con el mismo tamaño
+                    st.download_button("🔥 Descargar", data=bytes(pdf_bytes), file_name=f"Acordes_{raiz_sel}.pdf", mime="application/pdf", use_container_width=True)
 
     if nat_sel:
-        # Mostrar contraído por defecto (expanded=False)
         for _, row in df_raiz[df_raiz['Naturaleza'].isin(nat_sel)].iterrows():
             with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=False):
                 col1, col2 = st.columns(2)
