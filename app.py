@@ -39,7 +39,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # 2. CARGA DE DATOS
-APP_URL = "https://diccionario-acordes-xz99pzx875gw2ytzpqacv.streamlit.app/"
+APP_URL = "https://diccionario-acordes-xz99pzx875gw2ytzpqxacv.streamlit.app/"
 URL_EXCEL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
 GITHUB_BASE = "https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main"
 
@@ -136,7 +136,7 @@ if df is not None:
             placeholder = st.empty()
             
             if st.session_state.descargado:
-                placeholder.markdown("✅✅ *¡Listo, guardado!*")
+                placeholder.markdown("✅ *¡Listo, guardado!*")
             elif st.session_state.pdf_data:
                 placeholder.markdown("✅ *¡Listo para guardar!*")
 
