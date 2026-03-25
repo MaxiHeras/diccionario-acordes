@@ -1,90 +1,73 @@
 import streamlit as st
 import pandas as pd
+from reportlab.pdfgen import canvas
+from io import BytesIO
 
-# 1. CONFIGURACIÓN
-st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
+# Configuración básica
+st.set_page_config(page_title="Diccionario de Acordes", layout="wide")
 
-st.markdown("""
-    <style>
-    @media (prefers-color-scheme: dark) { .chord-img { filter: invert(1) hue-rotate(180deg); } }
-    .scroll-container { display: flex; overflow-x: auto; gap: 15px; padding: 10px 0; -webkit-overflow-scrolling: touch; }
-    .chord-item { flex: 0 0 auto; text-align: center; }
-    </style>
-""", unsafe_allow_html=True)
-
-# 2. CARGA DE DATOS
-APP_URL = "https://diccionario-acordes-okhwulgyz9ueachvkdfh26.streamlit.app/"
+# URL de tu Google Sheets (formato CSV)
 URL_EXCEL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
-URL_QR = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={APP_URL}"
 
 @st.cache_data
-def load():
+def cargar_datos():
     try:
         df = pd.read_csv(URL_EXCEL)
+        # Limpiamos nombres de columnas por si acaso
         df.columns = [str(c).strip() for c in df.columns]
         return df
-    except: return None
+    except Exception as e:
+        st.error(f"No se pudo conectar con la base de datos: {e}")
+        return None
 
-df = load()
+def generar_pdf(df_filtrado):
+    buffer = BytesIO()
+    c = canvas.Canvas(buffer)
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(100, 800, "Diccionario de Acordes Personalizado")
+    
+    y = 750
+    c.setFont("Helvetica", 12)
+    for index, row in df_filtrado.iterrows():
+        texto = f"Nota: {row['Raiz']} | Tipo: {row['Naturaleza']} | Notas: {row['Notas']}"
+        c.drawString(100, y, texto)
+        y -= 25
+        if y < 50: # Control de página
+            c.showPage()
+            y = 800
+            
+    c.save()
+    return buffer.getvalue()
+
+# --- INTERFAZ ---
+df = cargar_datos()
 
 if df is not None:
-    # 3. BARRA LATERAL (Sin botón, ahora es automática)
-    with st.sidebar:
-        st.header("🔍 Buscar Acorde")
-        notas_orden = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B']
-        r_list = [n for n in notas_orden if n in df['Raiz'].unique()]
-        raiz_sel = st.selectbox("Nota Raíz:", r_list)
+    st.title("🎸 Diccionario de Acordes")
+    
+    # Filtros en la barra lateral
+    st.sidebar.header("Filtros")
+    notas_disponibles = sorted(df['Raiz'].unique())
+    nota_sel = st.sidebar.selectbox("Selecciona la Nota Raíz:", notas_disponibles)
+    
+    tipos_disponibles = df[df['Raiz'] == nota_sel]['Naturaleza'].unique()
+    tipo_sel = st.sidebar.multiselect("Selecciona el Tipo:", tipos_disponibles)
+    
+    if tipo_sel:
+        df_f = df[(df['Raiz'] == nota_sel) & (df['Naturaleza'].isin(tipo_sel))]
         
-        df_raiz = df[df['Raiz'] == raiz_sel]
-        # Al quitar el botón, los resultados se actualizan cada vez que cambias esto
-        nat_sel = st.multiselect("Tipo:", options=df_raiz['Naturaleza'].unique())
+        col1, col2 = st.columns([2, 1])
         
-        st.write("---")
-        st.image(URL_QR, caption="Escanear para compartir", width=180)
-        st.caption(f"**Enlace de la App:**")
-        st.code(APP_URL, language=None)
-
-    # 4. RESULTADOS
-    if nat_sel:
-        df_f = df_raiz[df_raiz['Naturaleza'].isin(nat_sel)]
-        esta_expandido = False if len(nat_sel) > 1 else True
-        
-        for idx, row in df_f.iterrows():
-            with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=esta_expandido):
-                # NOTAS
-                notas = [str(row[c]).strip() for c in ['N1','N2','N3','N4'] if pd.notna(row.get(c)) and str(row[c]).lower() not in ['nan','','0']]
-                st.write(f"**Notas:** {' - '.join(notas)}")
-                
-                # INTERVALOS (Iván y Tradicional)
-                col1, col2 = st.columns(2)
-                with col1:
-                    ivan = str(row.get('Int_IVAN', '')).strip()
-                    if ivan and ivan.lower() not in ['nan', '0', '']:
-                        st.info(f"**Int_IVAN:**\n\n{ivan}")
-                with col2:
-                    trad = str(row.get('Int_TRAD', '')).strip()
-                    if trad and trad.lower() not in ['nan', '0', '']:
-                        st.success(f"**Int_TRAD:**\n\n{trad}")
-                
-                st.write("---")
-                
-                # GALERÍA HORIZONTAL
-                h_items = ""
-                GITHUB_BASE = "https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main"
-                
-                for i in range(1, 10):
-                    val = str(row.get(f'Diagrama{i}', 'nan')).strip()
-                    if val.lower().endswith('.png'):
-                        nombre_archivo = val.split('/')[-1]
-                        url_img = f"{GITHUB_BASE}/{row['Naturaleza']}/{nombre_archivo}"
-                        div_id = f"pos_{idx}_{i}"
-                        h_items += f'<div class="chord-item" id="{div_id}"><img src="{url_img}" class="chord-img" width="110" onerror="document.getElementById(\'{div_id}\').style.display=\'none\';"><p style="font-size:12px;color:gray;">P{i}</p></div>'
-                
-                if h_items:
-                    st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
-                else:
-                    st.warning("No hay diagramas disponibles.")
+        with col1:
+            st.dataframe(df_f, use_container_width=True)
+            
+        with col2:
+            pdf = generar_pdf(df_f)
+            st.download_button(
+                label="📥 Descargar Acordes en PDF",
+                data=pdf,
+                file_name=f"acordes_{nota_sel}.pdf",
+                mime="application/pdf"
+            )
     else:
-        st.info("Elegí un acorde en el menú lateral para empezar.")
-else:
-    st.error("Error al cargar el Excel.")
+        st.info("Selecciona al menos un tipo de acorde en el menú lateral para ver los resultados.")
