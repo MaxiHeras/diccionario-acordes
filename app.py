@@ -4,7 +4,6 @@ import requests
 from fpdf import FPDF
 from io import BytesIO
 import urllib.parse
-from streamlit_extras.stylable_container import stylable_container # Opcional para mayor control estético
 
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
@@ -26,7 +25,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # 2. CARGA DE DATOS
-APP_URL = "https://diccionario-acordes-xz99pzx875gw2ytzpqxacv.streamlit.app/"
+APP_URL = "https://diccionario-acordes-xz99pzx875gw2ytzpqacv.streamlit.app/"
 URL_EXCEL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
 GITHUB_BASE = "https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main"
 
@@ -62,7 +61,7 @@ def mostrar_detalle_acorde(row):
     st.write(f"**Notas:** {' - '.join(lista_n)}")
     
     c1, c2 = st.columns(2)
-    # IVAN en Verde (Success) y TRAD en Azul (Info)
+    # Int_IVAN en Verde (Success) y Int_TRAD en Azul (Info)
     with c1: st.success(f"**Int_IVAN:** {row.get('Int_IVAN','N/A')}") 
     with c2: st.info(f"**Int_TRAD:** {row.get('Int_TRAD','N/A')}")
     
@@ -97,6 +96,7 @@ def generar_pdf(dataframe_seleccionado):
         pdf.set_font("helvetica", "B", 11); pdf.write(6, "Notas: "); pdf.set_font("helvetica", "", 11)
         pdf.write(6, f"{' - '.join([str(row.get(n,'')) for n in ['N1','N2','N3','N4'] if pd.notna(row.get(n))])}\n")
         
+        # Etiquetas corregidas en PDF
         pdf.set_font("helvetica", "B", 11); pdf.write(6, "Int_IVAN: "); pdf.set_font("helvetica", "", 11)
         pdf.write(6, f"{str(row.get('Int_IVAN', 'N/A'))}\n")
         
@@ -186,10 +186,20 @@ if df is not None:
         qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={urllib.parse.quote(APP_URL)}"
         st.image(qr_url, caption="Escaneá para abrir", width=180)
         
-        # BOTÓN DE COPIAR URL AL PORTAPAPELES
-        if st.button("📋 Copiar enlace de la app"):
-            st.write(f'<script>navigator.clipboard.writeText("{APP_URL}");</script>', unsafe_allow_html=True)
-            st.success("¡Enlace copiado!")
+        # BOTÓN DE COPIAR URL (SOLUCIÓN SIN LIBRERÍAS EXTRAS)
+        st.markdown(f"""
+            <button onclick="navigator.clipboard.writeText('{APP_URL}')" style="
+                width: 100%; 
+                background-color: #f0f2f6; 
+                border: 1px solid #d3d3d3; 
+                padding: 10px; 
+                border-radius: 5px; 
+                cursor: pointer;
+                font-family: sans-serif;
+                font-size: 14px;">
+                📋 Copiar enlace de la app
+            </button>
+        """, unsafe_allow_html=True)
 
     # CUERPO PRINCIPAL
     if modo == "Diccionario 📖":
