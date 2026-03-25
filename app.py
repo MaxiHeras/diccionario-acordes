@@ -177,7 +177,7 @@ if df is not None:
         
         # URL DE SOLO LECTURA (Sin iconos confusos, segura y fácil de seleccionar)
         st.text_input("Enlace de la app:", value=APP_URL, disabled=True)
-        st.caption("Seleccioná la URL de arriba para copiarla.")
+        st.caption("by Maxi Heras - Tucumán")
 
     # CUERPO PRINCIPAL
     if modo == "Diccionario 📖":
