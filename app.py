@@ -4,18 +4,19 @@ import requests
 from fpdf import FPDF
 from io import BytesIO
 import urllib.parse
+import time
 
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
-# CSS: FUERZA 3 COLUMNAS Y DISEÑO DE BOTONES
+# CSS: OPTIMIZACIÓN DE VELOCIDAD Y DISEÑO
 st.markdown("""
     <style>
     @media (prefers-color-scheme: dark) { .chord-img-web { filter: invert(1) hue-rotate(180deg); } }
     .scroll-container { display: flex; overflow-x: auto; gap: 15px; padding: 10px 0; }
     .chord-img-web { width: 150px; height: auto; display: block; margin: 0 auto; }
     
-    /* FUERZA 3 COLUMNAS EN MÓVIL SIN ROMPER LA LÓGICA DE CLICK */
+    /* FUERZA 3 COLUMNAS EN MÓVIL */
     [data-testid="stHorizontalBlock"] {
         display: flex !important;
         flex-direction: row !important;
@@ -28,12 +29,17 @@ st.markdown("""
         min-width: 31% !important;
     }
 
+    /* ANIMACIÓN INSTANTÁNEA: Eliminamos transiciones para que el feedback sea inmediato */
     .stButton > button {
         width: 100% !important;
         padding: 5px 2px !important;
         font-size: 13px !important;
         min-height: 42px !important;
         border-radius: 6px !important;
+        transition: none !important; /* Elimina el retraso de color */
+    }
+    .stButton > button:active {
+        transform: scale(0.95); /* Feedback táctil rápido */
     }
     </style>
 """, unsafe_allow_html=True)
@@ -51,7 +57,6 @@ def load():
         return df
     except: return None
 
-# Inicialización de estados
 if "seleccionados" not in st.session_state: st.session_state.seleccionados = []
 if "notas_inversas" not in st.session_state: st.session_state.notas_inversas = set()
 
@@ -105,7 +110,7 @@ if df is not None:
     orden_tipos = ["MAYOR", "MENOR", "DOMINANTE", "AUMENTADO", "DISMINUIDO", "SEMIDISMINUIDO", "MAJ7", "MENOR7"]
     
     with st.sidebar:
-        modo = st.radio("Modo:", ["Diccionario 📖", "Identificador 🔍"])
+        modo = st.radio("Modo:", ["Diccionario 📖", "Buscador 🔍"])
         st.write("---")
 
         if modo == "Diccionario 📖":
@@ -118,30 +123,30 @@ if df is not None:
                 st.session_state.seleccionados = opciones
             
             st.multiselect("Tipo:", opciones, key="seleccionados")
-            
-            # BOTONES DE ACCIÓN (Todo, Limpiar, PDF)
             c1, c2 = st.columns(2)
             c1.button("Todo", on_click=seleccionar_todo, args=(opciones,), use_container_width=True)
             c2.button("Limpiar", on_click=limpiar_todo, use_container_width=True)
             
             st.write("")
+            # ANIMACIÓN DE CARGA PARA EL PDF
             if st.button("📥 Generar PDF de Selección", use_container_width=True):
                 df_para_pdf = df_raiz[df_raiz['Naturaleza'].isin(st.session_state.seleccionados)]
                 if not df_para_pdf.empty:
-                    pdf_bytes = generar_pdf(df_para_pdf)
-                    st.download_button("💾 Descargar Archivo", data=bytes(pdf_bytes), file_name=f"Acordes_{raiz_sel}.pdf", use_container_width=True)
+                    with st.status("Generando archivo...", expanded=False) as status:
+                        pdf_bytes = generar_pdf(df_para_pdf)
+                        status.update(label="¡PDF Listo!", state="complete", expanded=False)
+                    st.download_button("💾 Guardar Acordes", data=bytes(pdf_bytes), file_name=f"Acordes_{raiz_sel}.pdf", use_container_width=True)
                 else:
-                    st.warning("Seleccioná al menos un acorde.")
+                    st.warning("Seleccioná acordes primero.")
 
             st.write("---")
             st.write("📲 **Compartir App**")
             qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={urllib.parse.quote(APP_URL)}"
-            st.image(qr_url, caption="Escaneá para abrir")
+            st.image(qr_url)
             st.code(APP_URL, language=None)
         
         else:
-            st.header("🔍 Identificador")
-            # BOTONERA NOTAS (Fuerza 3 columnas)
+            st.header("🔍 Buscador")
             for i in range(0, len(notas_musicales), 3):
                 cols = st.columns(3)
                 for j in range(3):
@@ -157,7 +162,7 @@ if df is not None:
                 st.session_state.notas_inversas = set()
                 st.rerun()
 
-    # --- PANTALLA PRINCIPAL ---
+    # --- RENDERIZADO PRINCIPAL ---
     if modo == "Diccionario 📖":
         if st.session_state.seleccionados:
             tabs_ordenados = [t for t in orden_tipos if t in st.session_state.seleccionados]
@@ -179,20 +184,14 @@ if df is not None:
                             h_items += f'<div style="flex:0 0 auto; text-align:center;"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
                     st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
 
-    else: # MODO IDENTIFICADOR (BÚSQUEDA AUTOMÁTICA)
+    else: # MODO BUSCADOR
         seleccion = st.session_state.notas_inversas
         if seleccion:
-            st.subheader(f"Buscando: {' - '.join(sorted(list(seleccion)))}")
+            st.subheader(f"Notas: {' - '.join(sorted(list(seleccion)))}")
+            res = df[df.apply(lambda r: seleccion == {str(r[n]) for n in ['N1','N2','N3','N4'] if pd.notna(r[n])}, axis=1)]
             
-            # Lógica de coincidencia exacta
-            def coincide(r):
-                notas_acorde = {str(r[n]) for n in ['N1', 'N2', 'N3', 'N4'] if pd.notna(r[n])}
-                return seleccion == notas_acorde
-            
-            resultados = df[df.apply(coincide, axis=1)]
-            
-            if not resultados.empty:
-                for _, row in resultados.iterrows():
+            if not res.empty:
+                for _, row in res.iterrows():
                     with st.expander(f"✅ {row['Raiz']} {row['Naturaleza']}", expanded=True):
                         st.info(f"**IVAN:** {row.get('Int_IVAN','')} | **TRAD:** {row.get('Int_TRAD','')}")
                         h_items = ""
@@ -203,4 +202,4 @@ if df is not None:
                                 h_items += f'<div style="flex:0 0 auto; text-align:center;"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
                         st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
             else:
-                st.warning("No se encontró un acorde exacto con esas notas.")
+                st.warning("No hay coincidencias.")
