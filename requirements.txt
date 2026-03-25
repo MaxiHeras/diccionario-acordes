@@ -1,4 +1,3 @@
 pandas
 streamlit
 reportlab
-xhtml2pdf
