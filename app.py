@@ -13,7 +13,9 @@ st.markdown("""
     @media (prefers-color-scheme: dark) { .chord-img { filter: invert(1) hue-rotate(180deg); } }
     .scroll-container { display: flex; overflow-x: auto; gap: 15px; padding: 10px 0; -webkit-overflow-scrolling: touch; }
     .chord-item { flex: 0 0 auto; text-align: center; }
-    .notas-web { font-size: 20px; font-weight: bold; color: #31333F; margin-bottom: 15px; }
+    .notas-web { font-size: 20px; font-weight: bold; color: #31333F; margin-bottom: 10px; }
+    /* Ajuste para reducir la altura de los recuadros st.info y st.success */
+    div[data-testid="stNotification"] { padding: 0.5rem 1rem; min-height: auto; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -30,7 +32,7 @@ def load():
         return df
     except: return None
 
-# --- FUNCIÓN PDF (SOLO ENCABEZADOS EN NEGRITA) ---
+# --- FUNCIÓN PDF CON MARCA DE AGUA ---
 def generar_pdf(dataframe_seleccionado):
     pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.set_auto_page_break(auto=True, margin=15)
@@ -38,14 +40,23 @@ def generar_pdf(dataframe_seleccionado):
     for _, row in dataframe_seleccionado.iterrows():
         pdf.add_page()
         
-        # TÍTULO (Negro, Recuadro)
+        # MARCA DE AGUA (Nombre: Maxi Heras)
+        pdf.set_font("Helvetica", "B", 40)
+        pdf.set_text_color(240, 240, 240) # Gris muy claro
+        # Rotación y posición central de la marca de agua
+        with pdf.rotation(45, x=105, y=148):
+            pdf.text(60, 148, "MAXI HERAS")
+        
+        # Restablecer color para el contenido
+        pdf.set_text_color(0, 0, 0)
+        
+        # TÍTULO
         pdf.set_font("Helvetica", "B", 24)
-        pdf.set_text_color(0, 0, 0) 
         pdf.cell(0, 20, f"{row['Raiz']} {row['Naturaleza']}", border=1, ln=True, align='C')
         
         pdf.ln(8) 
         
-        # TEXTO UNIFICADO (11 puntos, Gris Oscuro)
+        # CONTENIDO INFORMATIVO
         pdf.set_text_color(60, 60, 60)
         alt_linea = 5
         
@@ -53,7 +64,7 @@ def generar_pdf(dataframe_seleccionado):
         pdf.set_font("Helvetica", "B", 11)
         pdf.write(alt_linea, "Notas: ")
         pdf.set_font("Helvetica", "", 11)
-        notas_list = [str(row[c]).strip() for c in ['N1','N2','N3','N4'] if c in row and pd.notna(row[c]) and str(row[c]).lower() not in ['nan','','0']]
+        notas_list = [str(row[c]).strip() for c in ['N1','N2','N3','N4'] if c in row and pd.notna(row[c])]
         pdf.write(alt_linea, f"{' - '.join(notas_list)}\n")
         pdf.ln(2)
 
@@ -82,9 +93,7 @@ def generar_pdf(dataframe_seleccionado):
         for i in range(1, 10):
             val = str(row.get(f'Diagrama{i}', 'nan')).strip()
             if val.lower().endswith('.png'):
-                nombre_archivo = val.split('/')[-1]
-                nat_url = str(row['Naturaleza']).replace(' ', '%20')
-                url_img = f"{GITHUB_BASE}/{nat_url}/{nombre_archivo}"
+                url_img = f"{GITHUB_BASE}/{str(row['Naturaleza']).replace(' ', '%20')}/{val.split('/')[-1]}"
                 try:
                     img_data = requests.get(url_img, timeout=5).content
                     img_buffer = BytesIO(img_data)
@@ -116,17 +125,13 @@ if df is not None:
         notas_orden = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B']
         r_list = [n for n in notas_orden if n in df['Raiz'].unique()]
         
-        # Lógica para resetear selección al cambiar Raíz
-        if "raiz_anterior" not in st.session_state:
-            st.session_state.raiz_anterior = r_list[0]
-        
+        if "raiz_anterior" not in st.session_state: st.session_state.raiz_anterior = r_list[0]
         raiz_sel = st.selectbox("Nota Raíz:", r_list)
         
         df_raiz = df[df['Raiz'] == raiz_sel]
         tipos_reales = df_raiz['Naturaleza'].unique()
         opciones_finales = [t for t in orden_deseado if t in tipos_reales] + sorted([t for t in tipos_reales if t not in orden_deseado])
 
-        # Si cambió la raíz, forzamos la selección de TODO
         if raiz_sel != st.session_state.raiz_anterior:
             st.session_state.seleccionados = opciones_finales
             st.session_state.raiz_anterior = raiz_sel
@@ -165,21 +170,22 @@ if df is not None:
 
         for idx, row in df_f.iterrows():
             with st.expander(f"📖 {row['Raiz']} {row['Naturaleza']}", expanded=debe_expandir):
-                notas_web = [str(row[c]).strip() for c in ['N1','N2','N3','N4'] if c in row and pd.notna(row[c]) and str(row[c]).lower() not in ['nan','','0']]
+                notas_web = [str(row[c]).strip() for c in ['N1','N2','N3','N4'] if c in row and pd.notna(row[c])]
                 st.markdown(f'<p class="notas-web">Notas: {" - ".join(notas_web)}</p>', unsafe_allow_html=True)
                 
                 c1, c2 = st.columns(2)
                 ivan, trad = str(row.get('Int_IVAN', '')).strip(), str(row.get('Int_TRAD', '')).strip()
-                if ivan and ivan.lower() != 'nan': c1.info(f"**Intervalos IVAN:**\n\n{ivan}")
-                if trad and trad.lower() != 'nan': c2.success(f"**Intervalos TRAD:**\n\n{trad}")
+                
+                # INVERSIÓN DE COLORES: IVAN (Verde/Success) y TRAD (Azul/Info)
+                if ivan and ivan.lower() != 'nan': c1.success(f"**Intervalos IVAN:**\n\n{ivan}")
+                if trad and trad.lower() != 'nan': c2.info(f"**Intervalos TRAD:**\n\n{trad}")
                 
                 st.write("---")
                 h_items = ""
                 for i in range(1, 10):
                     val = str(row.get(f'Diagrama{i}', 'nan')).strip()
                     if val.lower().endswith('.png'):
-                        nombre_archivo = val.split('/')[-1]
-                        url_img = f"{GITHUB_BASE}/{str(row['Naturaleza']).replace(' ', '%20')}/{nombre_archivo}"
+                        url_img = f"{GITHUB_BASE}/{str(row['Naturaleza']).replace(' ', '%20')}/{val.split('/')[-1]}"
                         h_items += f'<div class="chord-item"><img src="{url_img}" class="chord-img" width="110"><p style="font-size:12px;color:gray;">P{i}</p></div>'
                 if h_items: st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
 else:
