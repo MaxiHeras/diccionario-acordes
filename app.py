@@ -8,7 +8,7 @@ import urllib.parse
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
-# CSS: ESTILOS VISUALES
+# CSS: ESTILOS VISUALES Y ESPACIADO
 st.markdown("""
     <style>
     [data-testid="stSidebarUserContent"] { padding-top: 0.5rem !important; }
@@ -19,6 +19,14 @@ st.markdown("""
     .chord-img-web { width: 100% !important; height: auto !important; }
     .stButton > button { width: 100% !important; border-radius: 6px !important; }
     
+    /* Separación entre opciones de radio (Diccionario e Identificador) */
+    [data-testid="stWidgetLabel"] + div div[data-testid="stMarkdownContainer"] {
+        margin-bottom: 10px !important;
+    }
+    div[data-testid="stRadio"] > div {
+        gap: 15px !important;
+    }
+
     .stTextInput input:disabled {
         -webkit-text-fill-color: #31333F !important;
         opacity: 1 !important;
@@ -29,7 +37,7 @@ st.markdown("""
 
 # 2. CARGA DE DATOS
 APP_URL = "https://diccionario-acordes-xz99pzx875gw2ytzpqxacv.streamlit.app/"
-URL_EXCEL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
+URL_EXCEL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx:out:csv"
 GITHUB_BASE = "https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main"
 
 @st.cache_data(ttl=600)
@@ -164,7 +172,6 @@ if df is not None:
             notas_ordenadas = sorted(list(st.session_state.notas_id))
             st.write(f"**Notas seleccionadas:** {', '.join(notas_ordenadas)}")
             
-            # Búsqueda en el DataFrame
             res = df[df.apply(lambda r: set([str(r[x]) for x in ['N1','N2','N3','N4'] if pd.notna(r[x])]) == st.session_state.notas_id, axis=1)]
             
             if not res.empty:
