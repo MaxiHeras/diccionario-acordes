@@ -8,7 +8,7 @@ import urllib.parse
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
-# CSS: ESTILOS VISUALES Y ESPACIADO
+# CSS: AJUSTE DE ESPACIADO FINO Y ESTILOS
 st.markdown("""
     <style>
     [data-testid="stSidebarUserContent"] { padding-top: 0.5rem !important; }
@@ -19,12 +19,12 @@ st.markdown("""
     .chord-img-web { width: 100% !important; height: auto !important; }
     .stButton > button { width: 100% !important; border-radius: 6px !important; }
     
-    /* Separación entre opciones de radio (Diccionario e Identificador) */
-    [data-testid="stWidgetLabel"] + div div[data-testid="stMarkdownContainer"] {
-        margin-bottom: 10px !important;
-    }
+    /* Espaciado reducido entre Diccionario e Identificador */
     div[data-testid="stRadio"] > div {
-        gap: 15px !important;
+        gap: 4px !important;
+    }
+    [data-testid="stWidgetLabel"] + div div[data-testid="stMarkdownContainer"] {
+        margin-bottom: 2px !important;
     }
 
     .stTextInput input:disabled {
@@ -37,7 +37,7 @@ st.markdown("""
 
 # 2. CARGA DE DATOS
 APP_URL = "https://diccionario-acordes-xz99pzx875gw2ytzpqxacv.streamlit.app/"
-URL_EXCEL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx:out:csv"
+URL_EXCEL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
 GITHUB_BASE = "https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main"
 
 @st.cache_data(ttl=600)
@@ -68,6 +68,7 @@ def mostrar_detalle_acorde(row):
     st.write("---")
     st.write("**Diagramas:**")
     h_items = ""
+    # Mantenemos lógica SOS para GitHub
     nat_url = urllib.parse.quote(str(row['Naturaleza']).replace("#", "SOS"))
     for j in range(1, 10):
         v = str(row.get(f'Diagrama{j}', 'nan')).strip()
@@ -79,6 +80,7 @@ def mostrar_detalle_acorde(row):
 
 df = load()
 if df is not None:
+    # Orden musical
     notas_base = ['C', 'D', 'E', 'F', 'G', 'A', 'B']
     orden_tipos = ["MAYOR", "MENOR", "DOMINANTE", "AUMENTADO", "DISMINUIDO", "SEMIDISMINUIDO", "MAJ7", "MENOR7"]
     
@@ -96,6 +98,7 @@ if df is not None:
             st.write("Alteración:")
             c_nat, c_sos, c_bem = st.columns(3)
             
+            # Checkboxes exclusivos: marcar uno desmarca el resto
             with c_nat: 
                 if st.checkbox("Nat.", value=(st.session_state.alteracion == "Nat."), key="chk_nat"):
                     if st.session_state.alteracion != "Nat.":
@@ -131,7 +134,7 @@ if df is not None:
             st.write("**Selecciona Notas:**")
             notas_id_list = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B']
             
-            # BOTONERA 3 POR FILA EN EL SIDEBAR
+            # Botonera 3 por fila en el Sidebar
             for i in range(0, len(notas_id_list), 3):
                 cols = st.columns(3)
                 for j in range(3):
@@ -169,11 +172,8 @@ if df is not None:
     elif modo == "Identificador 🔍":
         st.header("🔍 Identificador de Acordes")
         if st.session_state.notas_id:
-            notas_ordenadas = sorted(list(st.session_state.notas_id))
-            st.write(f"**Notas seleccionadas:** {', '.join(notas_ordenadas)}")
-            
+            # Búsqueda de coincidencia exacta de notas
             res = df[df.apply(lambda r: set([str(r[x]) for x in ['N1','N2','N3','N4'] if pd.notna(r[x])]) == st.session_state.notas_id, axis=1)]
-            
             if not res.empty:
                 st.success("✅ Acorde Identificado:")
                 mostrar_detalle_acorde(res.iloc[0])
