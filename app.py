@@ -19,29 +19,18 @@ st.markdown("""
     .chord-img-web { width: 100% !important; height: auto !important; }
     .stButton > button { width: 100% !important; border-radius: 6px !important; }
     
-    /* Estilo para URL de solo lectura corregido */
+    /* URL de solo lectura */
     .stTextInput input:disabled {
         -webkit-text-fill-color: #31333F !important;
         opacity: 1 !important;
         background-color: #f0f2f6 !important;
     }
-    
-    /* Estilo para el debug de URLs */
-    .debug-url {
-        background-color: #f0f0f0;
-        border: 1px solid #ccc;
-        padding: 10px;
-        border-radius: 5px;
-        font-family: monospace;
-        font-size: 12px;
-        margin-bottom: 10px;
-        overflow-x: auto;
-    }
     </style>
 """, unsafe_allow_html=True)
 
-# 2. CARGA DE DATOS CON URL CORREGIDA Y ACTUALIZACIÓN AUTOMÁTICA
-APP_URL = "https://diccionario-acordes-xz99pzx875gw2ytzpqacv.streamlit.app/"
+# 2. CARGA DE DATOS Y CONFIGURACIÓN
+# URL Verificada según tu captura
+APP_URL = "https://diccionario-acordes-xz99pzx875gw2ytzpqxacv.streamlit.app/"
 URL_EXCEL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
 GITHUB_BASE = "https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main"
 
@@ -78,32 +67,19 @@ def mostrar_detalle_acorde(row):
     st.write("**Diagramas:**")
     h_items = ""
     
-    # --- PRUEBA TÉCNICA DEFINITIVA ---
-    # Codificamos la naturaleza para la URL (esto convierte '#' en '%23')
-    nat_codificada = urllib.parse.quote(str(row['Naturaleza']))
+    # REEMPLAZO PARA URL: '#' por 'SOS' (Carpeta)
+    nat_url = urllib.parse.quote(str(row['Naturaleza']).replace("#", "SOS"))
     
     for j in range(1, 10):
         v = str(row.get(f'Diagrama{j}', 'nan')).strip()
         if v.lower().endswith('.png'):
-            nombre_archivo = v.split('/')[-1]
-            url = f"{GITHUB_BASE}/{nat_codificada}/{nombre_archivo}"
-            
-            # Mostramos la URL exacta que estamos intentando cargar
-            if row['Raiz'] == 'F#' and row['Naturaleza'] == 'DOMINANTE' and j == 1:
-                st.markdown(f'<div class="debug-url">🔍 DEBUG DE URL (Diagrama 1):<br>{url}</div>', unsafe_allow_html=True)
-                # Intentamos hacer una petición rápida para ver si la URL responde
-                try:
-                    response = requests.head(url, timeout=2)
-                    if response.status_code == 200:
-                        st.write("✅ La URL responde correctamente (Código 200). El problema es de visualización en el navegador.")
-                    else:
-                        st.write(f"❌ La URL dio error {response.status_code}. GitHub rechaza esta dirección.")
-                except:
-                    st.write("⚠️ No se pudo verificar la URL (timeout).")
-            
+            # REEMPLAZO PARA URL: '#' por 'SOS' (Nombre de archivo)
+            nombre_archivo = v.split('/')[-1].replace("#", "SOS")
+            url = f"{GITHUB_BASE}/{nat_url}/{nombre_archivo}"
             h_items += f'<div class="chord-diag-item"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
     
     if h_items: st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
+    else: st.warning("No se encontraron diagramas (Verifica que el nombre en GitHub use 'SOS').")
 
 class PDF_Final(FPDF):
     def footer(self):
@@ -130,11 +106,12 @@ def generar_pdf(dataframe_seleccionado):
         X_START, GAP_X, GAP_Y, COLS, DIAG_W, DIAG_H = 15, 8, 12, 4, 38, 45
         y_grid_top = pdf.get_y()
         count = 0
-        nat_pdf = urllib.parse.quote(str(row['Naturaleza']))
+        nat_pdf = urllib.parse.quote(str(row['Naturaleza']).replace("#", "SOS"))
         for i in range(1, 10):
             val = str(row.get(f'Diagrama{i}', 'nan')).strip()
             if val.lower().endswith('.png'):
-                url_img = f"{GITHUB_BASE}/{nat_pdf}/{val.split('/')[-1]}"
+                archivo_pdf = val.split('/')[-1].replace("#", "SOS")
+                url_img = f"{GITHUB_BASE}/{nat_pdf}/{archivo_pdf}"
                 try:
                     img_data = requests.get(url_img, timeout=5).content
                     col, fila = count % COLS, count // COLS
