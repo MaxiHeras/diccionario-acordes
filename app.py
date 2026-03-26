@@ -9,7 +9,7 @@ import time
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
-# CSS: ESTILOS Y ESPACIADO PERSONALIZADO
+# CSS: ESTILOS PERSONALIZADOS Y AJUSTE DE ESPACIADO
 st.markdown("""
     <style>
     [data-testid="stSidebarUserContent"] { padding-top: 0.5rem !important; }
@@ -32,7 +32,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 2. CARGA DE DATOS Y CLASE PDF
+# 2. FUNCIONES DE DATOS Y GENERACIÓN DE PDF
 APP_URL = "https://diccionario-acordes-xz99pzx875gw2ytzpqxacv.streamlit.app/"
 URL_EXCEL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
 GITHUB_BASE = "https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main"
@@ -45,61 +45,50 @@ def load():
         return df
     except: return None
 
-class PDF_Final(FPDF):
-    def footer(self):
-        self.set_y(-15)
-        self.set_font("helvetica", "B", 10)
-        self.set_text_color(150, 150, 150)
-        self.cell(0, 10, "Generado por Diccionario de Acordes - Maxi Heras", align='R')
-
-def generar_pdf(df_seleccion, raiz_nombre):
-    pdf = PDF_Final(orientation='P', unit='mm', format='A4')
-    pdf.set_auto_page_break(auto=True, margin=20)
+def generar_pdf_con_qr(df_seleccion, raiz_nombre):
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
     
-    # QR dinámico dentro del PDF
+    # QR dentro del PDF (Esquina superior derecha)
     qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={urllib.parse.quote(APP_URL)}"
-    try: pdf.image(qr_url, x=170, y=10, w=25)
-    except: pass
+    try:
+        pdf.image(qr_url, x=170, y=10, w=25)
+    except:
+        pass # Evita errores si falla la API externa de QR
     
-    pdf.set_font("helvetica", 'B', 16)
+    pdf.set_font("Arial", 'B', 16)
     pdf.cell(160, 10, txt=f"Acordes de {raiz_nombre}", ln=True)
-    pdf.set_font("helvetica", '', 10)
-    pdf.cell(160, 10, txt="Escanea el QR para volver a la App interactiva", ln=True)
+    pdf.set_font("Arial", '', 10)
+    pdf.cell(160, 10, txt="Escanea el QR para volver a la App", ln=True)
     pdf.ln(10)
     
     for _, row in df_seleccion.iterrows():
-        pdf.set_font("helvetica", 'B', 14)
+        pdf.set_font("Arial", 'B', 14)
         pdf.set_fill_color(240, 242, 246)
         pdf.cell(0, 10, txt=f"{row['Raiz']} {row['Naturaleza']}", ln=True, fill=True)
         
-        pdf.set_font("helvetica", '', 12)
+        pdf.set_font("Arial", '', 12)
         notas = [str(row[n]) for n in ['N1','N2','N3','N4'] if pd.notna(row[n])]
         pdf.cell(0, 8, txt=f"Notas: {' - '.join(notas)}", ln=True)
         
-        pdf.set_text_color(46, 125, 50)
+        pdf.set_text_color(46, 125, 50) # Verde para Int_IVAN
         pdf.cell(0, 8, txt=f"Int_IVAN: {row.get('Int_IVAN','')}", ln=True)
         pdf.set_text_color(0, 0, 0)
         pdf.ln(5)
     
+    # Salida corregida para evitar el AttributeError
     return pdf.output(dest='S').encode('latin-1')
 
-# 3. ESTADOS DE SESIÓN
+# 3. MANEJO DE ESTADOS (SESSION STATE)
 if "alteracion" not in st.session_state: st.session_state.alteracion = "Nat."
 if "seleccionados" not in st.session_state: st.session_state.seleccionados = []
-if "pdf_data" not in st.session_state: st.session_state.pdf_data = None
-if "descargado" not in st.session_state: st.session_state.descargado = False
 if "ultima_nota_completa" not in st.session_state: st.session_state.ultima_nota_completa = ""
+if "ultimo_modo" not in st.session_state: st.session_state.ultimo_modo = "Diccionario 📖"
 if "notas_id" not in st.session_state: st.session_state.notas_id = set()
 
-def seleccionar_todo(opciones): 
-    st.session_state.seleccionados = opciones
-    st.session_state.pdf_data = None
-
-def limpiar_todo(): 
-    st.session_state.seleccionados = []
-    st.session_state.pdf_data = None
-    st.session_state.descargado = False
+def seleccionar_todo(opciones): st.session_state.seleccionados = opciones
+def limpiar_todo(): st.session_state.seleccionados = []
 
 def mostrar_detalle_acorde(row):
     st.markdown(f"### {row['Raiz']} {row['Naturaleza']}")
@@ -130,6 +119,10 @@ if df is not None:
     with st.sidebar:
         st.subheader("Seleccionar Modo")
         modo = st.radio(" ", ["Diccionario 📖", "Identificador 🔍"], label_visibility="collapsed")
+        
+        if modo != st.session_state.ultimo_modo:
+            st.session_state.ultimo_modo = modo
+            st.session_state.ultima_nota_completa = "" 
         st.write("---")
 
         if modo == "Diccionario 📖":
@@ -137,6 +130,7 @@ if df is not None:
             st.write("Alteración:")
             c_nat, c_sos, c_bem = st.columns(3)
             
+            # Selección exclusiva de alteración
             with c_nat: 
                 if st.checkbox("Nat.", value=(st.session_state.alteracion == "Nat."), key="chk_nat"):
                     if st.session_state.alteracion != "Nat.":
@@ -160,7 +154,6 @@ if df is not None:
                 if raiz_final != st.session_state.ultima_nota_completa:
                     st.session_state.ultima_nota_completa = raiz_final
                     st.session_state.seleccionados = opciones_disponibles
-                    st.session_state.pdf_data = None
                 
                 st.multiselect("Tipo:", opciones_disponibles, key="seleccionados")
                 col1, col2 = st.columns(2)
@@ -168,18 +161,15 @@ if df is not None:
                 col2.button("Limpiar", on_click=limpiar_todo, use_container_width=True)
                 
                 st.write("---")
+                # PDF CON QR Y ANIMACIÓN DE ESTADO
                 if st.session_state.seleccionados:
                     if st.button("📄 Generar PDF de Selección", use_container_width=True):
-                        with st.status("Preparando PDF...", expanded=True) as status:
+                        with st.status("Preparando PDF con QR...", expanded=True) as status:
                             df_sel = df_raiz[df_raiz['Naturaleza'].isin(st.session_state.seleccionados)]
-                            st.session_state.pdf_data = generar_pdf(df_sel, raiz_final)
-                            st.session_state.descargado = False
-                            status.update(label="✅ PDF listo para descargar", state="complete", expanded=False)
-                    
-                    if st.session_state.pdf_data:
-                        st.download_button("⬇️ Descargar PDF", data=st.session_state.pdf_data, 
-                                         file_name=f"Acordes_{raiz_final}.pdf", mime="application/pdf", 
-                                         use_container_width=True, type="primary")
+                            pdf_data = generar_pdf_con_qr(df_sel, raiz_final)
+                            time.sleep(1)
+                            status.update(label="✅ PDF generado con éxito", state="complete", expanded=False)
+                        st.download_button("⬇️ Descargar PDF", data=pdf_data, file_name=f"Acordes_{raiz_final}.pdf", mime="application/pdf", use_container_width=True)
 
         elif modo == "Identificador 🔍":
             st.write("**Selecciona Notas:**")
