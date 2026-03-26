@@ -19,7 +19,6 @@ st.markdown("""
     .chord-img-web { width: 100% !important; height: auto !important; }
     .stButton > button { width: 100% !important; border-radius: 6px !important; }
     
-    /* URL de solo lectura */
     .stTextInput input:disabled {
         -webkit-text-fill-color: #31333F !important;
         opacity: 1 !important;
@@ -28,8 +27,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 2. CARGA DE DATOS Y CONFIGURACIÓN
-# URL Verificada según tu captura
+# 2. CARGA DE DATOS
 APP_URL = "https://diccionario-acordes-xz99pzx875gw2ytzpqxacv.streamlit.app/"
 URL_EXCEL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
 GITHUB_BASE = "https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main"
@@ -42,19 +40,14 @@ def load():
         return df
     except: return None
 
-# Estados de sesión
+# ESTADOS DE SESIÓN
+if "alteracion" not in st.session_state: st.session_state.alteracion = "Nat."
 if "seleccionados" not in st.session_state: st.session_state.seleccionados = []
-if "notas_inversas" not in st.session_state: st.session_state.notas_inversas = set()
-if "pdf_data" not in st.session_state: st.session_state.pdf_data = None
+if "ultima_nota_completa" not in st.session_state: st.session_state.ultima_nota_completa = ""
+if "ultimo_modo" not in st.session_state: st.session_state.ultimo_modo = "Diccionario 📖"
 
 def seleccionar_todo(opciones): st.session_state.seleccionados = opciones
-def limpiar_todo(): 
-    st.session_state.seleccionados = []
-    st.session_state.pdf_data = None
-
-def toggle_nota(nota):
-    if nota in st.session_state.notas_inversas: st.session_state.notas_inversas.remove(nota)
-    else: st.session_state.notas_inversas.add(nota)
+def limpiar_todo(): st.session_state.seleccionados = []
 
 def mostrar_detalle_acorde(row):
     st.markdown(f"### {row['Raiz']} {row['Naturaleza']}")
@@ -66,110 +59,70 @@ def mostrar_detalle_acorde(row):
     st.write("---")
     st.write("**Diagramas:**")
     h_items = ""
-    
-    # REEMPLAZO PARA URL: '#' por 'SOS' (Carpeta)
+    # Transformación SOS para GitHub
     nat_url = urllib.parse.quote(str(row['Naturaleza']).replace("#", "SOS"))
-    
     for j in range(1, 10):
         v = str(row.get(f'Diagrama{j}', 'nan')).strip()
         if v.lower().endswith('.png'):
-            # REEMPLAZO PARA URL: '#' por 'SOS' (Nombre de archivo)
             nombre_archivo = v.split('/')[-1].replace("#", "SOS")
             url = f"{GITHUB_BASE}/{nat_url}/{nombre_archivo}"
             h_items += f'<div class="chord-diag-item"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
-    
     if h_items: st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
-    else: st.warning("No se encontraron diagramas (Verifica que el nombre en GitHub use 'SOS').")
-
-class PDF_Final(FPDF):
-    def footer(self):
-        self.set_y(-15)
-        self.set_font("helvetica", "B", 12)
-        self.set_text_color(190, 190, 190)
-        self.cell(0, 10, "Maxi Heras - Tucumán", align='R')
-
-def generar_pdf(dataframe_seleccionado):
-    pdf = PDF_Final(orientation='P', unit='mm', format='A4')
-    pdf.set_auto_page_break(auto=True, margin=20)
-    for _, row in dataframe_seleccionado.iterrows():
-        pdf.add_page()
-        pdf.set_font("helvetica", "B", 24)
-        pdf.cell(0, 20, f"{row['Raiz']} {row['Naturaleza']}", border=1, ln=True, align='C')
-        pdf.ln(8) 
-        pdf.set_font("helvetica", "B", 11); pdf.write(6, "Notas: "); pdf.set_font("helvetica", "", 11)
-        pdf.write(6, f"{' - '.join([str(row.get(n,'')) for n in ['N1','N2','N3','N4'] if pd.notna(row.get(n))])}\n")
-        pdf.set_font("helvetica", "B", 11); pdf.write(6, "Int_IVAN: "); pdf.set_font("helvetica", "", 11)
-        pdf.write(6, f"{str(row.get('Int_IVAN', 'N/A'))}\n")
-        pdf.set_font("helvetica", "B", 11); pdf.write(6, "Int_TRAD: "); pdf.set_font("helvetica", "", 11)
-        pdf.write(6, f"{str(row.get('Int_TRAD', 'N/A'))}\n")
-        pdf.ln(14) 
-        X_START, GAP_X, GAP_Y, COLS, DIAG_W, DIAG_H = 15, 8, 12, 4, 38, 45
-        y_grid_top = pdf.get_y()
-        count = 0
-        nat_pdf = urllib.parse.quote(str(row['Naturaleza']).replace("#", "SOS"))
-        for i in range(1, 10):
-            val = str(row.get(f'Diagrama{i}', 'nan')).strip()
-            if val.lower().endswith('.png'):
-                archivo_pdf = val.split('/')[-1].replace("#", "SOS")
-                url_img = f"{GITHUB_BASE}/{nat_pdf}/{archivo_pdf}"
-                try:
-                    img_data = requests.get(url_img, timeout=5).content
-                    col, fila = count % COLS, count // COLS
-                    pos_x = X_START + (col * (DIAG_W + GAP_X))
-                    pos_y = y_grid_top + (fila * (DIAG_H + GAP_Y))
-                    pdf.image(BytesIO(img_data), x=pos_x, y=pos_y, w=DIAG_W, h=DIAG_H)
-                    count += 1
-                except: continue
-    return pdf.output()
 
 df = load()
 if df is not None:
-    # ORDEN MUSICAL: C, D, E, F, G, A, B
-    orden_musical = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B']
-    notas_en_excel = df['Raiz'].unique().tolist()
-    todas_las_notas = [n for n in orden_musical if n in notas_en_excel]
-    
+    notas_base = ['C', 'D', 'E', 'F', 'G', 'A', 'B']
     orden_tipos = ["MAYOR", "MENOR", "DOMINANTE", "AUMENTADO", "DISMINUIDO", "SEMIDISMINUIDO", "MAJ7", "MENOR7"]
     
     with st.sidebar:
         st.subheader("Seleccionar Modo")
         modo = st.radio(" ", ["Diccionario 📖", "Identificador 🔍"], label_visibility="collapsed")
+        
+        # Resetear si cambia de modo
+        if modo != st.session_state.ultimo_modo:
+            st.session_state.ultimo_modo = modo
+            st.session_state.ultima_nota_completa = "" # Fuerza el reseteo al volver al diccionario
+
         st.write("---")
 
         if modo == "Diccionario 📖":
-            raiz_sel = st.selectbox("Nota Raíz:", todas_las_notas)
-            df_raiz = df[df['Raiz'] == raiz_sel]
-            opciones = [t for t in orden_tipos if t in df_raiz['Naturaleza'].unique()]
+            raiz_base = st.selectbox("Nota Raíz:", notas_base)
             
-            if "u_raiz" not in st.session_state or st.session_state.u_raiz != raiz_sel:
-                st.session_state.u_raiz = raiz_sel
-                st.session_state.seleccionados = opciones
-                st.session_state.pdf_data = None
+            st.write("Alteración:")
+            c_nat, c_sos, c_bem = st.columns(3)
             
-            st.multiselect("Tipo:", opciones, key="seleccionados")
-            c1, c2 = st.columns(2)
-            c1.button("Todo", on_click=seleccionar_todo, args=(opciones,), use_container_width=True)
-            c2.button("Limpiar", on_click=limpiar_todo, use_container_width=True)
+            with c_nat: 
+                if st.checkbox("Nat.", value=(st.session_state.alteracion == "Nat."), key="chk_nat"):
+                    st.session_state.alteracion = "Nat."
+            with c_sos: 
+                if st.checkbox("#", value=(st.session_state.alteracion == "#"), key="chk_sos"):
+                    st.session_state.alteracion = "#"
+            with c_bem: 
+                if st.checkbox("b", value=(st.session_state.alteracion == "b"), key="chk_bem"):
+                    st.session_state.alteracion = "b"
             
-            if st.button("📥 Generar PDF de Selección", use_container_width=True):
-                df_para_pdf = df_raiz[df_raiz['Naturaleza'].isin(st.session_state.seleccionados)]
-                if not df_para_pdf.empty:
-                    st.session_state.pdf_data = generar_pdf(df_para_pdf)
-                    st.rerun()
+            # Construcción de la nota final
+            raiz_final = raiz_base
+            if st.session_state.alteracion == "#": raiz_final = f"{raiz_base}#"
+            elif st.session_state.alteracion == "b": raiz_final = f"{raiz_base}b"
             
-            if st.session_state.pdf_data:
-                st.download_button("💾 GUARDAR PDF", bytes(st.session_state.pdf_data), f"Acordes_{raiz_sel}.pdf", "application/pdf", use_container_width=True, type="primary")
-        else:
-            st.write("### Identificador")
-            for i in range(0, len(orden_musical), 3):
-                cols = st.columns(3)
-                for j in range(3):
-                    idx = i + j
-                    if idx < len(orden_musical):
-                        n = orden_musical[idx]
-                        active = n in st.session_state.notas_inversas
-                        if cols[j].button(n, key=f"id_{n}", type="primary" if active else "secondary"):
-                            toggle_nota(n); st.rerun()
+            df_raiz = df[df['Raiz'] == raiz_final]
+            
+            if df_raiz.empty:
+                st.warning(f"La nota {raiz_final} no está en la base de datos.")
+            else:
+                opciones_disponibles = [t for t in orden_tipos if t in df_raiz['Naturaleza'].unique()]
+                
+                # LÓGICA DE RESETEO AUTOMÁTICO
+                if raiz_final != st.session_state.ultima_nota_completa:
+                    st.session_state.ultima_nota_completa = raiz_final
+                    st.session_state.seleccionados = opciones_disponibles
+                
+                st.multiselect("Tipo:", opciones_disponibles, key="seleccionados")
+                
+                col1, col2 = st.columns(2)
+                col1.button("Todo", on_click=seleccionar_todo, args=(opciones_disponibles,), use_container_width=True)
+                col2.button("Limpiar", on_click=limpiar_todo, use_container_width=True)
 
         st.write("---")
         st.write("📲 **Compartir App**")
@@ -178,21 +131,16 @@ if df is not None:
         st.text_input("Enlace de la app:", value=APP_URL, disabled=True)
 
     # CUERPO PRINCIPAL
-    if modo == "Diccionario 📖":
-        st.header(f"📖 Diccionario: {raiz_sel}")
-        tipos_visibles = [t for t in orden_tipos if t in st.session_state.seleccionados]
-        if tipos_visibles:
-            tabs = st.tabs(tipos_visibles)
+    if modo == "Diccionario 📖" and not df_raiz.empty:
+        st.header(f"📖 Diccionario: {raiz_final}")
+        tipos_para_mostrar = [t for t in orden_tipos if t in st.session_state.seleccionados]
+        if tipos_para_mostrar:
+            tabs = st.tabs(tipos_para_mostrar)
             for i, tab in enumerate(tabs):
                 with tab:
-                    row = df_raiz[df_raiz['Naturaleza'] == tipos_visibles[i]].iloc[0]
+                    row = df_raiz[df_raiz['Naturaleza'] == tipos_para_mostrar[i]].iloc[0]
                     mostrar_detalle_acorde(row)
         else: st.info("Seleccioná tipos en el sidebar.")
-    else:
+    elif modo == "Identificador 🔍":
         st.header("🔍 Identificador de Acordes")
-        notas_act = st.session_state.notas_inversas
-        if notas_act:
-            res = df[df.apply(lambda r: set([str(r[n]) for n in ['N1','N2','N3','N4'] if pd.notna(r[n])]) == notas_act, axis=1)]
-            if not res.empty: mostrar_detalle_acorde(res.iloc[0])
-            else: st.warning("Acorde no identificado.")
-        else: st.info("Seleccioná notas en la barra lateral.")
+        st.info("Función de identificación.")
