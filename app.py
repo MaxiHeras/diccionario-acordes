@@ -3,122 +3,97 @@ import pandas as pd
 from fpdf import FPDF
 import urllib.parse
 
-# 1. CONFIGURACIÓN
+# 1. CONFIGURACIÓN BÁSICA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide")
 
-# CSS: ESPACIADO Y ESTILO
+# CSS Reducido para evitar conflictos
 st.markdown("""
     <style>
     [data-testid="stSidebarUserContent"] { padding-top: 0.5rem !important; }
-    .block-container { padding-top: 1rem !important; }
-    div[data-testid="stRadio"] > div { gap: 4px !important; }
     .stButton > button { width: 100% !important; border-radius: 6px !important; }
-    @media (prefers-color-scheme: dark) { .chord-img-web { filter: invert(1) hue-rotate(180deg); } }
-    .scroll-container { display: flex; overflow-x: auto; gap: 15px; padding: 10px 0; }
-    .chord-diag-item { flex: 0 0 auto; width: 150px; text-align: center; }
-    .chord-img-web { width: 100%; height: auto; }
+    div[data-testid="stRadio"] > div { gap: 10px !important; }
     </style>
 """, unsafe_allow_html=True)
 
-# 2. FUNCIONES CLAVE
-APP_URL = "https://diccionario-acordes-xz99pzx875gw2ytzpqxacv.streamlit.app/"
+# 2. CARGA DE DATOS
 URL_EXCEL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
-GITHUB_BASE = "https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main"
 
-@st.cache_data(ttl=600)
-def load():
+@st.cache_data
+def load_data():
     try:
         df = pd.read_csv(URL_EXCEL)
         df.columns = [str(c).strip() for c in df.columns]
         return df
-    except: return None
+    except Exception as e:
+        st.error(f"Error cargando datos: {e}")
+        return None
 
-class PDF_Final(FPDF):
-    def footer(self):
-        self.set_y(-15)
-        self.set_font("helvetica", "B", 10)
-        self.set_text_color(150, 150, 150)
-        self.cell(0, 10, "Maxi Heras - Tucumán", align='R')
+# 3. CLASE PDF SIMPLIFICADA (Sin imágenes ni QR para evitar errores)
+class PDF(FPDF):
+    def header(self):
+        self.set_font('Arial', 'B', 15)
+        self.cell(0, 10, 'Diccionario de Acordes', 0, 1, 'C')
 
-def generar_pdf(df_seleccion, raiz_nombre):
-    pdf = PDF_Final(orientation='P', unit='mm', format='A4')
-    pdf.set_auto_page_break(auto=True, margin=20)
+def generar_pdf(df_sel, nota):
+    pdf = PDF()
     pdf.add_page()
-    pdf.set_font("helvetica", 'B', 20)
-    pdf.cell(0, 15, txt=f"Acordes de {raiz_nombre}", ln=True, align='C')
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(0, 10, f"Acordes de {nota}", ln=True)
+    pdf.ln(5)
     
-    for _, row in df_seleccion.iterrows():
-        pdf.set_font("helvetica", 'B', 14)
-        pdf.set_fill_color(240, 242, 246)
-        pdf.cell(0, 10, txt=f"{row['Raiz']} {row['Naturaleza']}", ln=True, fill=True)
-        pdf.set_font("helvetica", '', 11)
+    for _, row in df_sel.iterrows():
+        pdf.set_font("Arial", 'B', 12)
+        pdf.cell(0, 10, f"{row['Raiz']} {row['Naturaleza']}", ln=True, fill=False)
+        pdf.set_font("Arial", '', 10)
         notas = [str(row[n]) for n in ['N1','N2','N3','N4'] if pd.notna(row[n])]
-        pdf.cell(0, 8, txt=f"Notas: {' - '.join(notas)}", ln=True)
-        pdf.cell(0, 8, txt=f"Int_IVAN: {row.get('Int_IVAN','N/A')}", ln=True)
-        pdf.ln(5)
+        pdf.cell(0, 8, f"Notas: {' - '.join(notas)} | IVAN: {row.get('Int_IVAN','')}", ln=True)
+        pdf.ln(2)
+    
     return pdf.output(dest='S').encode('latin-1')
 
-# 3. LÓGICA DE ESTADOS
-if "alteracion" not in st.session_state: st.session_state.alteracion = "Nat."
-if "seleccionados" not in st.session_state: st.session_state.seleccionados = []
-if "pdf_data" not in st.session_state: st.session_state.pdf_data = None
-if "notas_id" not in st.session_state: st.session_state.notas_id = set()
-
-df = load()
+# 4. LÓGICA PRINCIPAL
+df = load_data()
 
 if df is not None:
-    notas_base = ['C', 'D', 'E', 'F', 'G', 'A', 'B']
-    orden_tipos = ["MAYOR", "MENOR", "DOMINANTE", "AUMENTADO", "DISMINUIDO", "SEMIDISMINUIDO", "MAJ7", "MENOR7"]
+    # Inicializar estados si no existen
+    if "alteracion" not in st.session_state: st.session_state.alteracion = "Nat."
     
     with st.sidebar:
-        st.subheader("Seleccionar Modo")
-        modo = st.radio(" ", ["Diccionario 📖", "Identificador 🔍"], label_visibility="collapsed")
-        st.write("---")
-
-        if modo == "Diccionario 📖":
-            raiz_base = st.selectbox("Nota Raíz:", notas_base)
-            st.write("Alteración:")
-            c1, c2, c3 = st.columns(3)
-            with c1: 
-                if st.checkbox("Nat.", value=(st.session_state.alteracion == "Nat.")):
-                    st.session_state.alteracion = "Nat."; st.rerun()
-            with c2: 
-                if st.checkbox("Sost.", value=(st.session_state.alteracion == "Sost.")):
-                    st.session_state.alteracion = "Sost."; st.rerun()
-            with c3: 
-                if st.checkbox("Bem.", value=(st.session_state.alteracion == "Bem.")):
-                    st.session_state.alteracion = "Bem."; st.rerun()
+        st.title("Ajustes")
+        raiz = st.selectbox("Nota:", ['C', 'D', 'E', 'F', 'G', 'A', 'B'])
+        
+        # Selectores de alteración
+        c1, c2, c3 = st.columns(3)
+        if c1.button("Nat."): st.session_state.alteracion = "Nat."
+        if c2.button("Sost."): st.session_state.alteracion = "Sost."
+        if c3.button("Bem."): st.session_state.alteracion = "Bem."
+        
+        st.write(f"Seleccionado: **{st.session_state.alteracion}**")
+        
+        # Construcción de la nota final
+        alt_map = {"Sost.": "#", "Bem.": "b", "Nat.": ""}
+        nota_final = raiz + alt_map[st.session_state.alteracion]
+        
+        df_filtrado = df[df['Raiz'] == nota_final]
+        
+        if not df_filtrado.empty:
+            tipos = st.multiselect("Tipos:", df_filtrado['Naturaleza'].unique())
             
-            raiz_f = raiz_base + ("#" if st.session_state.alteracion == "Sost." else "b" if st.session_state.alteracion == "Bem." else "")
-            df_r = df[df['Raiz'] == raiz_f]
-            
-            if not df_r.empty:
-                opts = [t for t in orden_tipos if t in df_r['Naturaleza'].unique()]
-                st.multiselect("Tipo:", opts, key="seleccionados")
-                
-                if st.session_state.seleccionados:
-                    if st.button("📄 Generar PDF"):
-                        st.session_state.pdf_data = generar_pdf(df_r[df_r['Naturaleza'].isin(st.session_state.seleccionados)], raiz_f)
-                    if st.session_state.pdf_data:
-                        st.download_button("⬇️ Descargar", data=st.session_state.pdf_data, file_name=f"{raiz_f}.pdf", mime="application/pdf")
-            else:
-                st.warning(f"Nota {raiz_f} no encontrada.")
+            if tipos:
+                df_para_pdf = df_filtrado[df_filtrado['Naturaleza'].isin(tipos)]
+                if st.button("Generar PDF"):
+                    pdf_bytes = generar_pdf(df_para_pdf, nota_final)
+                    st.download_button("Descargar Archivo", data=pdf_bytes, file_name=f"{nota_final}.pdf")
 
-        st.write("---")
-        qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={urllib.parse.quote(APP_URL)}"
-        st.image(qr_url, caption="App QR", width=150)
+    # Visualización en pantalla
+    st.header(f"Acordes de {nota_final}")
+    if not df_filtrado.empty:
+        st.dataframe(df_filtrado[['Raiz', 'Naturaleza', 'N1', 'N2', 'N3', 'N4', 'Int_IVAN']], hide_index=True)
+    else:
+        st.warning("No se encontraron datos para esta nota.")
 
-    # CUERPO PRINCIPAL
-    if modo == "Diccionario 📖" and not df_r.empty:
-        st.header(f"📖 {raiz_f}")
-        visibles = [t for t in orden_tipos if t in st.session_state.seleccionados]
-        if visibles:
-            tabs = st.tabs(visibles)
-            for i, tab in enumerate(tabs):
-                with tab:
-                    row = df_r[df_r['Naturaleza'] == visibles[i]].iloc[0]
-                    st.write(f"**Notas:** {' - '.join([str(row[n]) for n in ['N1','N2','N3','N4'] if pd.notna(row[n])])}")
-                    st.info(f"IVAN: {row.get('Int_IVAN','N/A')}")
-        else: st.info("Selecciona tipos en el sidebar.")
-else:
-    st.error("Error al cargar la base de datos.")
+# 5. REQUISITO CRÍTICO
+# Asegúrate de tener un archivo llamado 'requirements.txt' con:
+# streamlit
+# pandas
+# fpdf
