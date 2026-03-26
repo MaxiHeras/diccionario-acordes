@@ -98,9 +98,9 @@ if df is not None:
                         st.session_state.alteracion = "Nat."
                         st.rerun()
             with c_sos: 
-                if st.checkbox("Sos.", value=(st.session_state.alteracion == "Sos."), key="chk_sos"):
-                    if st.session_state.alteracion != "Sos.":
-                        st.session_state.alteracion = "Sos."
+                if st.checkbox("Sos.", value=(st.session_state.alteracion == "Sost."), key="chk_sos"):
+                    if st.session_state.alteracion != "Sost.":
+                        st.session_state.alteracion = "Sost."
                         st.rerun()
             with c_bem: 
                 if st.checkbox("Bem.", value=(st.session_state.alteracion == "Bem."), key="chk_bem"):
@@ -110,7 +110,7 @@ if df is not None:
             
             # Construcción de la nota final para búsqueda en Excel
             raiz_final = raiz_base
-            if st.session_state.alteracion == "Sos.": raiz_final = f"{raiz_base}#"
+            if st.session_state.alteracion == "Sost.": raiz_final = f"{raiz_base}#"
             elif st.session_state.alteracion == "Bem.": raiz_final = f"{raiz_base}b"
             
             df_raiz = df[df['Raiz'] == raiz_final]
