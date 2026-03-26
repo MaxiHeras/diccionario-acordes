@@ -9,7 +9,7 @@ import time
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
-# CSS: ESTILOS PERSONALIZADOS Y AJUSTE DE ESPACIADO
+# CSS: ESTILOS Y ESPACIADO FINO
 st.markdown("""
     <style>
     [data-testid="stSidebarUserContent"] { padding-top: 0.5rem !important; }
@@ -32,7 +32,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 2. FUNCIONES DE DATOS Y GENERACIÓN DE PDF
+# 2. FUNCIONES DE CARGA Y PDF (MÉTODO ALTERNATIVO ANTIFALLOS)
 APP_URL = "https://diccionario-acordes-xz99pzx875gw2ytzpqxacv.streamlit.app/"
 URL_EXCEL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
 GITHUB_BASE = "https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main"
@@ -50,12 +50,10 @@ def generar_pdf_con_qr(df_seleccion, raiz_nombre):
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
     
-    # QR dentro del PDF (Esquina superior derecha)
+    # QR dentro del PDF
     qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={urllib.parse.quote(APP_URL)}"
-    try:
-        pdf.image(qr_url, x=170, y=10, w=25)
-    except:
-        pass # Evita errores si falla la API externa de QR
+    try: pdf.image(qr_url, x=170, y=10, w=25)
+    except: pass
     
     pdf.set_font("Arial", 'B', 16)
     pdf.cell(160, 10, txt=f"Acordes de {raiz_nombre}", ln=True)
@@ -67,20 +65,18 @@ def generar_pdf_con_qr(df_seleccion, raiz_nombre):
         pdf.set_font("Arial", 'B', 14)
         pdf.set_fill_color(240, 242, 246)
         pdf.cell(0, 10, txt=f"{row['Raiz']} {row['Naturaleza']}", ln=True, fill=True)
-        
         pdf.set_font("Arial", '', 12)
         notas = [str(row[n]) for n in ['N1','N2','N3','N4'] if pd.notna(row[n])]
         pdf.cell(0, 8, txt=f"Notas: {' - '.join(notas)}", ln=True)
-        
-        pdf.set_text_color(46, 125, 50) # Verde para Int_IVAN
+        pdf.set_text_color(46, 125, 50)
         pdf.cell(0, 8, txt=f"Int_IVAN: {row.get('Int_IVAN','')}", ln=True)
         pdf.set_text_color(0, 0, 0)
         pdf.ln(5)
     
-    # Salida corregida para evitar el AttributeError
+    # MÉTODO INVISIBLE DE SALIDA (Para evitar AttributeError)
     return pdf.output(dest='S').encode('latin-1')
 
-# 3. MANEJO DE ESTADOS (SESSION STATE)
+# 3. LÓGICA DE LA APP
 if "alteracion" not in st.session_state: st.session_state.alteracion = "Nat."
 if "seleccionados" not in st.session_state: st.session_state.seleccionados = []
 if "ultima_nota_completa" not in st.session_state: st.session_state.ultima_nota_completa = ""
@@ -130,7 +126,7 @@ if df is not None:
             st.write("Alteración:")
             c_nat, c_sos, c_bem = st.columns(3)
             
-            # Selección exclusiva de alteración
+            # Etiquetas completas Sost. y Bem.
             with c_nat: 
                 if st.checkbox("Nat.", value=(st.session_state.alteracion == "Nat."), key="chk_nat"):
                     if st.session_state.alteracion != "Nat.":
@@ -161,7 +157,6 @@ if df is not None:
                 col2.button("Limpiar", on_click=limpiar_todo, use_container_width=True)
                 
                 st.write("---")
-                # PDF CON QR Y ANIMACIÓN DE ESTADO
                 if st.session_state.seleccionados:
                     if st.button("📄 Generar PDF de Selección", use_container_width=True):
                         with st.status("Preparando PDF con QR...", expanded=True) as status:
@@ -170,6 +165,8 @@ if df is not None:
                             time.sleep(1)
                             status.update(label="✅ PDF generado con éxito", state="complete", expanded=False)
                         st.download_button("⬇️ Descargar PDF", data=pdf_data, file_name=f"Acordes_{raiz_final}.pdf", mime="application/pdf", use_container_width=True)
+            else:
+                st.warning(f"La nota {raiz_final} no está en la base de datos.")
 
         elif modo == "Identificador 🔍":
             st.write("**Selecciona Notas:**")
