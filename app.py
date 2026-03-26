@@ -9,7 +9,7 @@ import time
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
-# CSS: AJUSTES DE UI Y ESPACIADO FINO
+# CSS: ESTILOS PERSONALIZADOS Y AJUSTE DE ESPACIADO
 st.markdown("""
     <style>
     [data-testid="stSidebarUserContent"] { padding-top: 0.5rem !important; }
@@ -20,7 +20,7 @@ st.markdown("""
     .chord-img-web { width: 100% !important; height: auto !important; }
     .stButton > button { width: 100% !important; border-radius: 6px !important; }
     
-    /* Espaciado sutil entre modos de navegación */
+    /* Espaciado reducido entre modos de navegación */
     div[data-testid="stRadio"] > div { gap: 4px !important; }
     [data-testid="stWidgetLabel"] + div div[data-testid="stMarkdownContainer"] { margin-bottom: 2px !important; }
 
@@ -32,7 +32,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 2. FUNCIONES DE CARGA Y PDF CON QR
+# 2. FUNCIONES DE DATOS Y GENERACIÓN DE PDF
 APP_URL = "https://diccionario-acordes-xz99pzx875gw2ytzpqxacv.streamlit.app/"
 URL_EXCEL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
 GITHUB_BASE = "https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main"
@@ -50,12 +50,12 @@ def generar_pdf_con_qr(df_seleccion, raiz_nombre):
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
     
-    # QR en el PDF (Esquina superior derecha)
+    # QR dentro del PDF (Esquina superior derecha)
     qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={urllib.parse.quote(APP_URL)}"
     try:
         pdf.image(qr_url, x=170, y=10, w=25)
     except:
-        pass # Evita que el PDF falle si el servicio de QR no responde
+        pass # Evita errores si falla la API externa de QR
     
     pdf.set_font("Arial", 'B', 16)
     pdf.cell(160, 10, txt=f"Acordes de {raiz_nombre}", ln=True)
@@ -70,16 +70,17 @@ def generar_pdf_con_qr(df_seleccion, raiz_nombre):
         
         pdf.set_font("Arial", '', 12)
         notas = [str(row[n]) for n in ['N1','N2','N3','N4'] if pd.notna(row[n])]
-        pdf.cell(0, 10, txt=f"Notas: {' - '.join(notas)}", ln=True)
-        pdf.set_text_color(46, 125, 50)
-        pdf.cell(0, 10, txt=f"Int_IVAN: {row.get('Int_IVAN','')}", ln=True)
+        pdf.cell(0, 8, txt=f"Notas: {' - '.join(notas)}", ln=True)
+        
+        pdf.set_text_color(46, 125, 50) # Verde para Int_IVAN
+        pdf.cell(0, 8, txt=f"Int_IVAN: {row.get('Int_IVAN','')}", ln=True)
         pdf.set_text_color(0, 0, 0)
         pdf.ln(5)
     
-    # Corrección del error de salida (output)
-    return pdf.output(dest='S')
+    # Salida corregida para evitar el AttributeError
+    return pdf.output(dest='S').encode('latin-1')
 
-# 3. ESTADOS DE SESIÓN
+# 3. MANEJO DE ESTADOS (SESSION STATE)
 if "alteracion" not in st.session_state: st.session_state.alteracion = "Nat."
 if "seleccionados" not in st.session_state: st.session_state.seleccionados = []
 if "ultima_nota_completa" not in st.session_state: st.session_state.ultima_nota_completa = ""
@@ -160,20 +161,19 @@ if df is not None:
                 col2.button("Limpiar", on_click=limpiar_todo, use_container_width=True)
                 
                 st.write("---")
-                # Botón de PDF con animación de carga
+                # PDF CON QR Y ANIMACIÓN DE ESTADO
                 if st.session_state.seleccionados:
                     if st.button("📄 Generar PDF de Selección", use_container_width=True):
                         with st.status("Preparando PDF con QR...", expanded=True) as status:
                             df_sel = df_raiz[df_raiz['Naturaleza'].isin(st.session_state.seleccionados)]
-                            pdf_output = generar_pdf_con_qr(df_sel, raiz_final)
+                            pdf_data = generar_pdf_con_qr(df_sel, raiz_final)
                             time.sleep(1)
                             status.update(label="✅ PDF generado con éxito", state="complete", expanded=False)
-                        st.download_button("⬇️ Descargar PDF", data=pdf_output, file_name=f"Acordes_{raiz_final}.pdf", mime="application/pdf", use_container_width=True)
+                        st.download_button("⬇️ Descargar PDF", data=pdf_data, file_name=f"Acordes_{raiz_final}.pdf", mime="application/pdf", use_container_width=True)
 
         elif modo == "Identificador 🔍":
             st.write("**Selecciona Notas:**")
             notas_id_list = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B']
-            # Botonera 3 columnas
             for i in range(0, len(notas_id_list), 3):
                 cols = st.columns(3)
                 for j in range(3):
