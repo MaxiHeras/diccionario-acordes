@@ -60,7 +60,6 @@ def mostrar_detalle_acorde(row):
     st.write("---")
     st.write("**Diagramas:**")
     h_items = ""
-    # Transformación SOS para GitHub (FSOS)
     nat_url = urllib.parse.quote(str(row['Naturaleza']).replace("#", "SOS"))
     for j in range(1, 10):
         v = str(row.get(f'Diagrama{j}', 'nan')).strip()
@@ -120,6 +119,26 @@ if df is not None:
             else:
                 st.warning(f"La nota {raiz_final} no está en la base.")
 
+        elif modo == "Identificador 🔍":
+            st.write("**Selecciona Notas:**")
+            notas_id_list = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B']
+            
+            # BOTONERA 3 POR FILA EN EL SIDEBAR
+            for i in range(0, len(notas_id_list), 3):
+                cols = st.columns(3)
+                for j in range(3):
+                    if i + j < len(notas_id_list):
+                        n = notas_id_list[i + j]
+                        es_activa = n in st.session_state.notas_id
+                        if cols[j].button(n, key=f"id_side_{n}", type="primary" if es_activa else "secondary"):
+                            if es_activa: st.session_state.notas_id.remove(n)
+                            else: st.session_state.notas_id.add(n)
+                            st.rerun()
+
+            if st.button("Limpiar Notas", use_container_width=True):
+                st.session_state.notas_id = set()
+                st.rerun()
+
         st.write("---")
         st.write("📲 **Compartir App**")
         qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={urllib.parse.quote(APP_URL)}"
@@ -141,29 +160,17 @@ if df is not None:
 
     elif modo == "Identificador 🔍":
         st.header("🔍 Identificador de Acordes")
-        st.write("Selecciona las notas para identificar el acorde:")
-        
-        notas_id_list = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B']
-        
-        for i in range(0, len(notas_id_list), 4):
-            cols = st.columns(4)
-            for j in range(4):
-                if i + j < len(notas_id_list):
-                    n = notas_id_list[i + j]
-                    es_activa = n in st.session_state.notas_id
-                    if cols[j].button(n, key=f"id_{n}", type="primary" if es_activa else "secondary", use_container_width=True):
-                        if es_activa: st.session_state.notas_id.remove(n)
-                        else: st.session_state.notas_id.add(n)
-                        st.rerun()
-
-        if st.button("Limpiar Notas", use_container_width=True):
-            st.session_state.notas_id = set()
-            st.rerun()
-
         if st.session_state.notas_id:
-            st.write(f"**Notas:** {', '.join(sorted(list(st.session_state.notas_id)))}")
+            notas_ordenadas = sorted(list(st.session_state.notas_id))
+            st.write(f"**Notas seleccionadas:** {', '.join(notas_ordenadas)}")
+            
+            # Búsqueda en el DataFrame
             res = df[df.apply(lambda r: set([str(r[x]) for x in ['N1','N2','N3','N4'] if pd.notna(r[x])]) == st.session_state.notas_id, axis=1)]
+            
             if not res.empty:
                 st.success("✅ Acorde Identificado:")
                 mostrar_detalle_acorde(res.iloc[0])
-            else: st.warning("No se encontró el acorde en la base de datos.")
+            else:
+                st.warning("No se encontró el acorde en la base de datos.")
+        else:
+            st.info("Selecciona las notas en la barra lateral para identificar el acorde.")
