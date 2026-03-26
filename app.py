@@ -28,12 +28,12 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 2. CARGA DE DATOS CON ACTUALIZACIÓN AUTOMÁTICA (Cada 10 min)
+# 2. CARGA DE DATOS CON URL CORREGIDA Y ACTUALIZACIÓN AUTOMÁTICA
 APP_URL = "https://diccionario-acordes-xz99pzx875gw2ytzpqxacv.streamlit.app/"
 URL_EXCEL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
 GITHUB_BASE = "https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main"
 
-@st.cache_data(ttl=600) # Se actualiza solo cada 600 segundos
+@st.cache_data(ttl=600) 
 def load():
     try:
         df = pd.read_csv(URL_EXCEL)
@@ -45,13 +45,11 @@ def load():
 if "seleccionados" not in st.session_state: st.session_state.seleccionados = []
 if "notas_inversas" not in st.session_state: st.session_state.notas_inversas = set()
 if "pdf_data" not in st.session_state: st.session_state.pdf_data = None
-if "descargado" not in st.session_state: st.session_state.descargado = False
 
 def seleccionar_todo(opciones): st.session_state.seleccionados = opciones
 def limpiar_todo(): 
     st.session_state.seleccionados = []
     st.session_state.pdf_data = None
-    st.session_state.descargado = False
 
 def toggle_nota(nota):
     if nota in st.session_state.notas_inversas: st.session_state.notas_inversas.remove(nota)
@@ -117,7 +115,12 @@ def generar_pdf(dataframe_seleccionado):
 
 df = load()
 if df is not None:
-    todas_las_notas = sorted(df['Raiz'].unique().tolist()) # Lista dinámica desde el Excel
+    # ORDEN MUSICAL ESPECÍFICO
+    orden_musical = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B']
+    notas_en_excel = df['Raiz'].unique().tolist()
+    # Filtramos el orden musical para mostrar solo las que existen en tu Excel
+    todas_las_notas = [n for n in orden_musical if n in notas_en_excel]
+    
     orden_tipos = ["MAYOR", "MENOR", "DOMINANTE", "AUMENTADO", "DISMINUIDO", "SEMIDISMINUIDO", "MAJ7", "MENOR7"]
     
     with st.sidebar:
@@ -134,7 +137,6 @@ if df is not None:
                 st.session_state.u_raiz = raiz_sel
                 st.session_state.seleccionados = opciones
                 st.session_state.pdf_data = None
-                st.session_state.descargado = False
             
             st.multiselect("Tipo:", opciones, key="seleccionados")
             c1, c2 = st.columns(2)
@@ -151,8 +153,15 @@ if df is not None:
                 st.download_button("💾 GUARDAR PDF", bytes(st.session_state.pdf_data), f"Acordes_{raiz_sel}.pdf", "application/pdf", use_container_width=True, type="primary")
         else:
             st.write("### Identificador")
-            # Identificador simplificado para el ejemplo
-            st.info("Seleccioná las notas en el piano/teclado para identificar el acorde.")
+            for i in range(0, len(orden_musical), 3):
+                cols = st.columns(3)
+                for j in range(3):
+                    idx = i + j
+                    if idx < len(orden_musical):
+                        n = orden_musical[idx]
+                        active = n in st.session_state.notas_inversas
+                        if cols[j].button(n, key=f"id_{n}", type="primary" if active else "secondary"):
+                            toggle_nota(n); st.rerun()
 
         st.write("---")
         st.write("📲 **Compartir App**")
@@ -171,3 +180,11 @@ if df is not None:
                     row = df_raiz[df_raiz['Naturaleza'] == tipos_visibles[i]].iloc[0]
                     mostrar_detalle_acorde(row)
         else: st.info("Seleccioná tipos en el sidebar.")
+    else:
+        st.header("🔍 Identificador de Acordes")
+        notas_act = st.session_state.notas_inversas
+        if notas_act:
+            res = df[df.apply(lambda r: set([str(r[n]) for n in ['N1','N2','N3','N4'] if pd.notna(r[n])]) == notas_act, axis=1)]
+            if not res.empty: mostrar_detalle_acorde(res.iloc[0])
+            else: st.warning("Acorde no identificado.")
+        else: st.info("Seleccioná notas en la barra lateral.")
