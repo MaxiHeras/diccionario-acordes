@@ -59,7 +59,7 @@ def mostrar_detalle_acorde(row):
     st.write("---")
     st.write("**Diagramas:**")
     h_items = ""
-    # Transformación SOS para GitHub
+    # Transformación SOS para GitHub según lo acordado
     nat_url = urllib.parse.quote(str(row['Naturaleza']).replace("#", "SOS"))
     for j in range(1, 10):
         v = str(row.get(f'Diagrama{j}', 'nan')).strip()
@@ -71,7 +71,7 @@ def mostrar_detalle_acorde(row):
 
 df = load()
 if df is not None:
-    notas_base = ['C', 'D', 'E', 'F', 'G', 'A', 'B']
+    notas_base = ['C', 'D', 'E', 'F', 'G', 'A', 'B'] # Orden musical estricto
     orden_tipos = ["MAYOR", "MENOR", "DOMINANTE", "AUMENTADO", "DISMINUIDO", "SEMIDISMINUIDO", "MAJ7", "MENOR7"]
     
     with st.sidebar:
@@ -81,7 +81,7 @@ if df is not None:
         # Resetear si cambia de modo
         if modo != st.session_state.ultimo_modo:
             st.session_state.ultimo_modo = modo
-            st.session_state.ultima_nota_completa = "" # Fuerza el reseteo al volver al diccionario
+            st.session_state.ultima_nota_completa = "" 
 
         st.write("---")
 
@@ -91,20 +91,27 @@ if df is not None:
             st.write("Alteración:")
             c_nat, c_sos, c_bem = st.columns(3)
             
+            # LÓGICA DE SELECCIÓN EXCLUSIVA (One-click only)
             with c_nat: 
                 if st.checkbox("Nat.", value=(st.session_state.alteracion == "Nat."), key="chk_nat"):
-                    st.session_state.alteracion = "Nat."
+                    if st.session_state.alteracion != "Nat.":
+                        st.session_state.alteracion = "Nat."
+                        st.rerun()
             with c_sos: 
-                if st.checkbox("#", value=(st.session_state.alteracion == "#"), key="chk_sos"):
-                    st.session_state.alteracion = "#"
+                if st.checkbox("Sos.", value=(st.session_state.alteracion == "Sos."), key="chk_sos"):
+                    if st.session_state.alteracion != "Sos.":
+                        st.session_state.alteracion = "Sos."
+                        st.rerun()
             with c_bem: 
-                if st.checkbox("b", value=(st.session_state.alteracion == "b"), key="chk_bem"):
-                    st.session_state.alteracion = "b"
+                if st.checkbox("Bem.", value=(st.session_state.alteracion == "Bem."), key="chk_bem"):
+                    if st.session_state.alteracion != "Bem.":
+                        st.session_state.alteracion = "Bem."
+                        st.rerun()
             
-            # Construcción de la nota final
+            # Construcción de la nota final para búsqueda en Excel
             raiz_final = raiz_base
-            if st.session_state.alteracion == "#": raiz_final = f"{raiz_base}#"
-            elif st.session_state.alteracion == "b": raiz_final = f"{raiz_base}b"
+            if st.session_state.alteracion == "Sos.": raiz_final = f"{raiz_base}#"
+            elif st.session_state.alteracion == "Bem.": raiz_final = f"{raiz_base}b"
             
             df_raiz = df[df['Raiz'] == raiz_final]
             
@@ -113,7 +120,7 @@ if df is not None:
             else:
                 opciones_disponibles = [t for t in orden_tipos if t in df_raiz['Naturaleza'].unique()]
                 
-                # LÓGICA DE RESETEO AUTOMÁTICO
+                # RESETEO Y SELECCIÓN TOTAL AL CAMBIAR NOTA O ALTERACIÓN
                 if raiz_final != st.session_state.ultima_nota_completa:
                     st.session_state.ultima_nota_completa = raiz_final
                     st.session_state.seleccionados = opciones_disponibles
@@ -141,6 +148,3 @@ if df is not None:
                     row = df_raiz[df_raiz['Naturaleza'] == tipos_para_mostrar[i]].iloc[0]
                     mostrar_detalle_acorde(row)
         else: st.info("Seleccioná tipos en el sidebar.")
-    elif modo == "Identificador 🔍":
-        st.header("🔍 Identificador de Acordes")
-        st.info("Función de identificación.")
