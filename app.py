@@ -4,12 +4,11 @@ import requests
 from fpdf import FPDF
 from io import BytesIO
 import urllib.parse
-import time
 
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
-# CSS: ESTILOS Y ESPACIADO PERSONALIZADO
+# CSS: ESTILOS DE INTERFAZ Y ESPACIADO
 st.markdown("""
     <style>
     [data-testid="stSidebarUserContent"] { padding-top: 0.5rem !important; }
@@ -20,7 +19,7 @@ st.markdown("""
     .chord-img-web { width: 100% !important; height: auto !important; }
     .stButton > button { width: 100% !important; border-radius: 6px !important; }
     
-    /* Espaciado reducido entre modos de navegación */
+    /* Espaciado reducido entre modos */
     div[data-testid="stRadio"] > div { gap: 4px !important; }
     [data-testid="stWidgetLabel"] + div div[data-testid="stMarkdownContainer"] { margin-bottom: 2px !important; }
 
@@ -32,7 +31,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 2. CARGA DE DATOS Y CLASE PDF
+# 2. CARGA DE DATOS Y LÓGICA DE PDF (SIN QR PARA EVITAR ERRORES)
 APP_URL = "https://diccionario-acordes-xz99pzx875gw2ytzpqxacv.streamlit.app/"
 URL_EXCEL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
 GITHUB_BASE = "https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main"
@@ -50,46 +49,37 @@ class PDF_Final(FPDF):
         self.set_y(-15)
         self.set_font("helvetica", "B", 10)
         self.set_text_color(150, 150, 150)
-        self.cell(0, 10, "Generado por Diccionario de Acordes - Maxi Heras", align='R')
+        self.cell(0, 10, "Maxi Heras - Tucumán", align='R')
 
 def generar_pdf(df_seleccion, raiz_nombre):
     pdf = PDF_Final(orientation='P', unit='mm', format='A4')
     pdf.set_auto_page_break(auto=True, margin=20)
     pdf.add_page()
     
-    # QR dinámico dentro del PDF
-    qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={urllib.parse.quote(APP_URL)}"
-    try: pdf.image(qr_url, x=170, y=10, w=25)
-    except: pass
-    
-    pdf.set_font("helvetica", 'B', 16)
-    pdf.cell(160, 10, txt=f"Acordes de {raiz_nombre}", ln=True)
-    pdf.set_font("helvetica", '', 10)
-    pdf.cell(160, 10, txt="Escanea el QR para volver a la App interactiva", ln=True)
-    pdf.ln(10)
+    pdf.set_font("helvetica", 'B', 20)
+    pdf.cell(0, 15, txt=f"Acordes de {raiz_nombre}", ln=True, align='C')
+    pdf.ln(5)
     
     for _, row in df_seleccion.iterrows():
         pdf.set_font("helvetica", 'B', 14)
         pdf.set_fill_color(240, 242, 246)
         pdf.cell(0, 10, txt=f"{row['Raiz']} {row['Naturaleza']}", ln=True, fill=True)
         
-        pdf.set_font("helvetica", '', 12)
+        pdf.set_font("helvetica", '', 11)
         notas = [str(row[n]) for n in ['N1','N2','N3','N4'] if pd.notna(row[n])]
         pdf.cell(0, 8, txt=f"Notas: {' - '.join(notas)}", ln=True)
-        
-        pdf.set_text_color(46, 125, 50)
-        pdf.cell(0, 8, txt=f"Int_IVAN: {row.get('Int_IVAN','')}", ln=True)
-        pdf.set_text_color(0, 0, 0)
+        pdf.cell(0, 8, txt=f"Int_IVAN: {row.get('Int_IVAN','N/A')}", ln=True)
+        pdf.cell(0, 8, txt=f"Int_TRAD: {row.get('Int_TRAD','N/A')}", ln=True)
         pdf.ln(5)
     
+    # Salida estándar compatible
     return pdf.output(dest='S').encode('latin-1')
 
 # 3. ESTADOS DE SESIÓN
 if "alteracion" not in st.session_state: st.session_state.alteracion = "Nat."
 if "seleccionados" not in st.session_state: st.session_state.seleccionados = []
 if "pdf_data" not in st.session_state: st.session_state.pdf_data = None
-if "descargado" not in st.session_state: st.session_state.descargado = False
-if "ultima_nota_completa" not in st.session_state: st.session_state.ultima_nota_completa = ""
+if "ultima_nota" not in st.session_state: st.session_state.ultima_nota = ""
 if "notas_id" not in st.session_state: st.session_state.notas_id = set()
 
 def seleccionar_todo(opciones): 
@@ -99,7 +89,6 @@ def seleccionar_todo(opciones):
 def limpiar_todo(): 
     st.session_state.seleccionados = []
     st.session_state.pdf_data = None
-    st.session_state.descargado = False
 
 def mostrar_detalle_acorde(row):
     st.markdown(f"### {row['Raiz']} {row['Naturaleza']}")
@@ -137,18 +126,16 @@ if df is not None:
             st.write("Alteración:")
             c_nat, c_sos, c_bem = st.columns(3)
             
+            # Etiquetas completas
             with c_nat: 
                 if st.checkbox("Nat.", value=(st.session_state.alteracion == "Nat."), key="chk_nat"):
-                    if st.session_state.alteracion != "Nat.":
-                        st.session_state.alteracion = "Nat."; st.rerun()
+                    st.session_state.alteracion = "Nat."; st.rerun()
             with c_sos: 
                 if st.checkbox("Sost.", value=(st.session_state.alteracion == "Sost."), key="chk_sos"):
-                    if st.session_state.alteracion != "Sost.":
-                        st.session_state.alteracion = "Sost."; st.rerun()
+                    st.session_state.alteracion = "Sost."; st.rerun()
             with c_bem: 
                 if st.checkbox("Bem.", value=(st.session_state.alteracion == "Bem."), key="chk_bem"):
-                    if st.session_state.alteracion != "Bem.":
-                        st.session_state.alteracion = "Bem."; st.rerun()
+                    st.session_state.alteracion = "Bem."; st.rerun()
             
             raiz_final = raiz_base
             if st.session_state.alteracion == "Sost.": raiz_final = f"{raiz_base}#"
@@ -157,8 +144,8 @@ if df is not None:
             df_raiz = df[df['Raiz'] == raiz_final]
             if not df_raiz.empty:
                 opciones_disponibles = [t for t in orden_tipos if t in df_raiz['Naturaleza'].unique()]
-                if raiz_final != st.session_state.ultima_nota_completa:
-                    st.session_state.ultima_nota_completa = raiz_final
+                if raiz_final != st.session_state.ultima_nota:
+                    st.session_state.ultima_nota = raiz_final
                     st.session_state.seleccionados = opciones_disponibles
                     st.session_state.pdf_data = None
                 
@@ -170,11 +157,8 @@ if df is not None:
                 st.write("---")
                 if st.session_state.seleccionados:
                     if st.button("📄 Generar PDF de Selección", use_container_width=True):
-                        with st.status("Preparando PDF...", expanded=True) as status:
-                            df_sel = df_raiz[df_raiz['Naturaleza'].isin(st.session_state.seleccionados)]
-                            st.session_state.pdf_data = generar_pdf(df_sel, raiz_final)
-                            st.session_state.descargado = False
-                            status.update(label="✅ PDF listo para descargar", state="complete", expanded=False)
+                        df_sel = df_raiz[df_raiz['Naturaleza'].isin(st.session_state.seleccionados)]
+                        st.session_state.pdf_data = generar_pdf(df_sel, raiz_final)
                     
                     if st.session_state.pdf_data:
                         st.download_button("⬇️ Descargar PDF", data=st.session_state.pdf_data, 
