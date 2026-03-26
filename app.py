@@ -4,11 +4,12 @@ import requests
 from fpdf import FPDF
 from io import BytesIO
 import urllib.parse
+import time
 
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
-# CSS: AJUSTE DE ESPACIADO FINO Y ESTILOS
+# CSS: AJUSTE DE ESPACIADO Y ESTILOS UI
 st.markdown("""
     <style>
     [data-testid="stSidebarUserContent"] { padding-top: 0.5rem !important; }
@@ -19,13 +20,9 @@ st.markdown("""
     .chord-img-web { width: 100% !important; height: auto !important; }
     .stButton > button { width: 100% !important; border-radius: 6px !important; }
     
-    /* Espaciado reducido entre Diccionario e Identificador */
-    div[data-testid="stRadio"] > div {
-        gap: 4px !important;
-    }
-    [data-testid="stWidgetLabel"] + div div[data-testid="stMarkdownContainer"] {
-        margin-bottom: 2px !important;
-    }
+    /* Espaciado reducido entre modos */
+    div[data-testid="stRadio"] > div { gap: 4px !important; }
+    [data-testid="stWidgetLabel"] + div div[data-testid="stMarkdownContainer"] { margin-bottom: 2px !important; }
 
     .stTextInput input:disabled {
         -webkit-text-fill-color: #31333F !important;
@@ -35,7 +32,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 2. CARGA DE DATOS
+# 2. FUNCIONES DE CARGA Y PDF CON QR
 APP_URL = "https://diccionario-acordes-xz99pzx875gw2ytzpqxacv.streamlit.app/"
 URL_EXCEL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
 GITHUB_BASE = "https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main"
@@ -48,7 +45,37 @@ def load():
         return df
     except: return None
 
-# ESTADOS DE SESIÓN
+def generar_pdf_con_qr(df_seleccion, raiz_nombre):
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_page()
+    
+    # Insertar QR en el PDF (Esquina superior derecha)
+    qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={urllib.parse.quote(APP_URL)}"
+    pdf.image(qr_url, x=170, y=10, w=25)
+    
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(160, 10, txt=f"Acordes de {raiz_nombre}", ln=True)
+    pdf.set_font("Arial", '', 10)
+    pdf.cell(160, 10, txt="Escanea el QR para ver los diagramas interactivos", ln=True)
+    pdf.ln(10)
+    
+    for _, row in df_seleccion.iterrows():
+        pdf.set_font("Arial", 'B', 14)
+        pdf.set_fill_color(240, 242, 246)
+        pdf.cell(0, 10, txt=f"{row['Raiz']} {row['Naturaleza']}", ln=True, fill=True)
+        
+        pdf.set_font("Arial", '', 12)
+        notas = [str(row[n]) for n in ['N1','N2','N3','N4'] if pd.notna(row[n])]
+        pdf.cell(0, 10, txt=f"Notas: {' - '.join(notas)}", ln=True)
+        pdf.set_text_color(46, 125, 50) # Color verde para Int_IVAN
+        pdf.cell(0, 10, txt=f"Int_IVAN: {row.get('Int_IVAN','')}", ln=True)
+        pdf.set_text_color(0, 0, 0)
+        pdf.ln(5)
+    
+    return pdf.output(dest='S').encode('latin-1')
+
+# 3. ESTADOS DE SESIÓN
 if "alteracion" not in st.session_state: st.session_state.alteracion = "Nat."
 if "seleccionados" not in st.session_state: st.session_state.seleccionados = []
 if "ultima_nota_completa" not in st.session_state: st.session_state.ultima_nota_completa = ""
@@ -66,9 +93,8 @@ def mostrar_detalle_acorde(row):
     with c1: st.success(f"**Int_IVAN:** {row.get('Int_IVAN','N/A')}") 
     with c2: st.info(f"**Int_TRAD:** {row.get('Int_TRAD','N/A')}")
     st.write("---")
-    st.write("**Diagramas:**")
+    
     h_items = ""
-    # Mantenemos lógica SOS para GitHub
     nat_url = urllib.parse.quote(str(row['Naturaleza']).replace("#", "SOS"))
     for j in range(1, 10):
         v = str(row.get(f'Diagrama{j}', 'nan')).strip()
@@ -76,11 +102,12 @@ def mostrar_detalle_acorde(row):
             nombre_archivo = v.split('/')[-1].replace("#", "SOS")
             url = f"{GITHUB_BASE}/{nat_url}/{nombre_archivo}"
             h_items += f'<div class="chord-diag-item"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
-    if h_items: st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
+    if h_items: 
+        st.write("**Diagramas:**")
+        st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
 
 df = load()
 if df is not None:
-    # Orden musical
     notas_base = ['C', 'D', 'E', 'F', 'G', 'A', 'B']
     orden_tipos = ["MAYOR", "MENOR", "DOMINANTE", "AUMENTADO", "DISMINUIDO", "SEMIDISMINUIDO", "MAJ7", "MENOR7"]
     
@@ -98,7 +125,6 @@ if df is not None:
             st.write("Alteración:")
             c_nat, c_sos, c_bem = st.columns(3)
             
-            # Checkboxes exclusivos: marcar uno desmarca el resto
             with c_nat: 
                 if st.checkbox("Nat.", value=(st.session_state.alteracion == "Nat."), key="chk_nat"):
                     if st.session_state.alteracion != "Nat.":
@@ -127,14 +153,21 @@ if df is not None:
                 col1, col2 = st.columns(2)
                 col1.button("Todo", on_click=seleccionar_todo, args=(opciones_disponibles,), use_container_width=True)
                 col2.button("Limpiar", on_click=limpiar_todo, use_container_width=True)
-            else:
-                st.warning(f"La nota {raiz_final} no está en la base.")
+                
+                st.write("---")
+                # PDF CON QR Y ANIMACIÓN
+                if st.session_state.seleccionados:
+                    if st.button("📄 Generar PDF de Selección", use_container_width=True):
+                        with st.status("Preparando PDF con QR...", expanded=True) as status:
+                            df_sel = df_raiz[df_raiz['Naturaleza'].isin(st.session_state.seleccionados)]
+                            pdf_data = generar_pdf_con_qr(df_sel, raiz_final)
+                            time.sleep(1)
+                            status.update(label="✅ PDF generado con éxito", state="complete", expanded=False)
+                        st.download_button("⬇️ Descargar PDF", data=pdf_data, file_name=f"Acordes_{raiz_final}.pdf", mime="application/pdf", use_container_width=True)
 
         elif modo == "Identificador 🔍":
             st.write("**Selecciona Notas:**")
             notas_id_list = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B']
-            
-            # Botonera 3 por fila en el Sidebar
             for i in range(0, len(notas_id_list), 3):
                 cols = st.columns(3)
                 for j in range(3):
@@ -145,16 +178,14 @@ if df is not None:
                             if es_activa: st.session_state.notas_id.remove(n)
                             else: st.session_state.notas_id.add(n)
                             st.rerun()
-
             if st.button("Limpiar Notas", use_container_width=True):
-                st.session_state.notas_id = set()
-                st.rerun()
+                st.session_state.notas_id = set(); st.rerun()
 
         st.write("---")
         st.write("📲 **Compartir App**")
-        qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={urllib.parse.quote(APP_URL)}"
-        st.image(qr_url, caption="Escaneá para abrir", width=180)
-        st.text_input("Enlace de la app:", value=APP_URL, disabled=True)
+        qr_side_url = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={urllib.parse.quote(APP_URL)}"
+        st.image(qr_side_url, caption="Escaneá para abrir", width=180)
+        st.text_input("Enlace:", value=APP_URL, disabled=True)
 
     # CUERPO PRINCIPAL
     if modo == "Diccionario 📖":
@@ -172,12 +203,9 @@ if df is not None:
     elif modo == "Identificador 🔍":
         st.header("🔍 Identificador de Acordes")
         if st.session_state.notas_id:
-            # Búsqueda de coincidencia exacta de notas
             res = df[df.apply(lambda r: set([str(r[x]) for x in ['N1','N2','N3','N4'] if pd.notna(r[x])]) == st.session_state.notas_id, axis=1)]
             if not res.empty:
                 st.success("✅ Acorde Identificado:")
                 mostrar_detalle_acorde(res.iloc[0])
-            else:
-                st.warning("No se encontró el acorde en la base de datos.")
-        else:
-            st.info("Selecciona las notas en la barra lateral para identificar el acorde.")
+            else: st.warning("No se encontró el acorde en la base.")
+        else: st.info("Selecciona las notas en la barra lateral.")
