@@ -8,7 +8,7 @@ import urllib.parse
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Diccionario de Acordes", layout="wide", initial_sidebar_state="expanded")
 
-# CSS: ESTILOS VISUALES
+# CSS: ESTILOS VISUALES Y CORRECCIONES DE UI
 st.markdown("""
     <style>
     [data-testid="stSidebarUserContent"] { padding-top: 0.5rem !important; }
@@ -19,6 +19,7 @@ st.markdown("""
     .chord-img-web { width: 100% !important; height: auto !important; }
     .stButton > button { width: 100% !important; border-radius: 6px !important; }
     
+    /* URL de solo lectura estilo 'Click para copiar' */
     .stTextInput input:disabled {
         -webkit-text-fill-color: #31333F !important;
         opacity: 1 !important;
@@ -27,7 +28,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 2. CARGA DE DATOS
+# 2. CONFIGURACIÓN DE DATOS Y RUTAS
 APP_URL = "https://diccionario-acordes-xz99pzx875gw2ytzpqxacv.streamlit.app/"
 URL_EXCEL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
 GITHUB_BASE = "https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main"
@@ -40,11 +41,12 @@ def load():
         return df
     except: return None
 
-# ESTADOS DE SESIÓN
+# ESTADOS DE SESIÓN PARA LÓGICA DE INTERFAZ
 if "alteracion" not in st.session_state: st.session_state.alteracion = "Nat."
 if "seleccionados" not in st.session_state: st.session_state.seleccionados = []
 if "ultima_nota_completa" not in st.session_state: st.session_state.ultima_nota_completa = ""
 if "ultimo_modo" not in st.session_state: st.session_state.ultimo_modo = "Diccionario 📖"
+if "notas_inversas" not in st.session_state: st.session_state.notas_inversas = set()
 
 def seleccionar_todo(opciones): st.session_state.seleccionados = opciones
 def limpiar_todo(): st.session_state.seleccionados = []
@@ -59,26 +61,32 @@ def mostrar_detalle_acorde(row):
     st.write("---")
     st.write("**Diagramas:**")
     h_items = ""
-    # Transformación SOS para GitHub según lo acordado
+    
+    # Lógica SOS para GitHub: Reemplaza '#' por 'SOS' en URL
     nat_url = urllib.parse.quote(str(row['Naturaleza']).replace("#", "SOS"))
+    
     for j in range(1, 10):
         v = str(row.get(f'Diagrama{j}', 'nan')).strip()
         if v.lower().endswith('.png'):
+            # Nombre de archivo con FSOS según tu nuevo esquema
             nombre_archivo = v.split('/')[-1].replace("#", "SOS")
             url = f"{GITHUB_BASE}/{nat_url}/{nombre_archivo}"
             h_items += f'<div class="chord-diag-item"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
+    
     if h_items: st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
+    else: st.warning("No se encontraron diagramas en el repositorio.")
 
 df = load()
 if df is not None:
-    notas_base = ['C', 'D', 'E', 'F', 'G', 'A', 'B'] # Orden musical estricto
+    # ORDEN MUSICAL REQUERIDO
+    notas_base = ['C', 'D', 'E', 'F', 'G', 'A', 'B']
     orden_tipos = ["MAYOR", "MENOR", "DOMINANTE", "AUMENTADO", "DISMINUIDO", "SEMIDISMINUIDO", "MAJ7", "MENOR7"]
     
     with st.sidebar:
         st.subheader("Seleccionar Modo")
         modo = st.radio(" ", ["Diccionario 📖", "Identificador 🔍"], label_visibility="collapsed")
         
-        # Resetear si cambia de modo
+        # Reset al cambiar de modo
         if modo != st.session_state.ultimo_modo:
             st.session_state.ultimo_modo = modo
             st.session_state.ultima_nota_completa = "" 
@@ -91,24 +99,21 @@ if df is not None:
             st.write("Alteración:")
             c_nat, c_sos, c_bem = st.columns(3)
             
-            # LÓGICA DE SELECCIÓN EXCLUSIVA (One-click only)
+            # CHECKBOXES EXCLUSIVOS: Marcar uno desmarca los otros
             with c_nat: 
                 if st.checkbox("Nat.", value=(st.session_state.alteracion == "Nat."), key="chk_nat"):
                     if st.session_state.alteracion != "Nat.":
-                        st.session_state.alteracion = "Nat."
-                        st.rerun()
+                        st.session_state.alteracion = "Nat."; st.rerun()
             with c_sos: 
-                if st.checkbox("Sos.", value=(st.session_state.alteracion == "Sost."), key="chk_sos"):
+                if st.checkbox("Sost.", value=(st.session_state.alteracion == "Sost."), key="chk_sos"):
                     if st.session_state.alteracion != "Sost.":
-                        st.session_state.alteracion = "Sost."
-                        st.rerun()
+                        st.session_state.alteracion = "Sost."; st.rerun()
             with c_bem: 
                 if st.checkbox("Bem.", value=(st.session_state.alteracion == "Bem."), key="chk_bem"):
                     if st.session_state.alteracion != "Bem.":
-                        st.session_state.alteracion = "Bem."
-                        st.rerun()
+                        st.session_state.alteracion = "Bem."; st.rerun()
             
-            # Construcción de la nota final para búsqueda en Excel
+            # Construcción de nota para búsqueda en base de datos
             raiz_final = raiz_base
             if st.session_state.alteracion == "Sost.": raiz_final = f"{raiz_base}#"
             elif st.session_state.alteracion == "Bem.": raiz_final = f"{raiz_base}b"
@@ -120,7 +125,7 @@ if df is not None:
             else:
                 opciones_disponibles = [t for t in orden_tipos if t in df_raiz['Naturaleza'].unique()]
                 
-                # RESETEO Y SELECCIÓN TOTAL AL CAMBIAR NOTA O ALTERACIÓN
+                # RESETEO Y SELECCIÓN TOTAL AUTOMÁTICA
                 if raiz_final != st.session_state.ultima_nota_completa:
                     st.session_state.ultima_nota_completa = raiz_final
                     st.session_state.seleccionados = opciones_disponibles
@@ -148,3 +153,6 @@ if df is not None:
                     row = df_raiz[df_raiz['Naturaleza'] == tipos_para_mostrar[i]].iloc[0]
                     mostrar_detalle_acorde(row)
         else: st.info("Seleccioná tipos en el sidebar.")
+    elif modo == "Identificador 🔍":
+        st.header("🔍 Identificador de Acordes")
+        st.info("Utiliza las notas del sidebar para identificar el acorde.")
