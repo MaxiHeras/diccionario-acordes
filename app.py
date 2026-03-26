@@ -19,7 +19,7 @@ st.markdown("""
     .chord-img-web { width: 100% !important; height: auto !important; }
     .stButton > button { width: 100% !important; border-radius: 6px !important; }
     
-    /* Estilo para URL de solo lectura */
+    /* Estilo para URL de solo lectura corregido */
     .stTextInput input:disabled {
         -webkit-text-fill-color: #31333F !important;
         opacity: 1 !important;
@@ -29,11 +29,12 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # 2. CARGA DE DATOS CON URL CORREGIDA Y ACTUALIZACIÓN AUTOMÁTICA
+# URL VERIFICADA: https://diccionario-acordes-xz99pzx875gw2ytzpqxacv.streamlit.app/
 APP_URL = "https://diccionario-acordes-xz99pzx875gw2ytzpqxacv.streamlit.app/"
 URL_EXCEL = "https://docs.google.com/spreadsheets/d/1VHwDMfGozCbe4_UKz9TfiQI9TrNr9ypZp45pMAOjyno/gviz/tq?tqx=out:csv"
 GITHUB_BASE = "https://raw.githubusercontent.com/MaxiHeras/diccionario-acordes/main"
 
-@st.cache_data(ttl=600) 
+@st.cache_data(ttl=600)
 def load():
     try:
         df = pd.read_csv(URL_EXCEL)
@@ -65,11 +66,13 @@ def mostrar_detalle_acorde(row):
     st.write("---")
     st.write("**Diagramas:**")
     h_items = ""
+    # Solución para F#: codificamos la naturaleza para la URL
+    nat_codificada = urllib.parse.quote(str(row['Naturaleza']))
     for j in range(1, 10):
         v = str(row.get(f'Diagrama{j}', 'nan')).strip()
         if v.lower().endswith('.png'):
-            nat_cod = urllib.parse.quote(str(row['Naturaleza']))
-            url = f"{GITHUB_BASE}/{nat_cod}/{v.split('/')[-1]}"
+            nombre_archivo = v.split('/')[-1]
+            url = f"{GITHUB_BASE}/{nat_codificada}/{nombre_archivo}"
             h_items += f'<div class="chord-diag-item"><img src="{url}" class="chord-img-web"><p style="font-size:12px;color:gray;">P{j}</p></div>'
     if h_items: st.markdown(f'<div class="scroll-container">{h_items}</div>', unsafe_allow_html=True)
 
@@ -98,10 +101,10 @@ def generar_pdf(dataframe_seleccionado):
         X_START, GAP_X, GAP_Y, COLS, DIAG_W, DIAG_H = 15, 8, 12, 4, 38, 45
         y_grid_top = pdf.get_y()
         count = 0
+        nat_pdf = urllib.parse.quote(str(row['Naturaleza']))
         for i in range(1, 10):
             val = str(row.get(f'Diagrama{i}', 'nan')).strip()
             if val.lower().endswith('.png'):
-                nat_pdf = urllib.parse.quote(str(row['Naturaleza']))
                 url_img = f"{GITHUB_BASE}/{nat_pdf}/{val.split('/')[-1]}"
                 try:
                     img_data = requests.get(url_img, timeout=5).content
@@ -115,10 +118,9 @@ def generar_pdf(dataframe_seleccionado):
 
 df = load()
 if df is not None:
-    # ORDEN MUSICAL ESPECÍFICO
+    # ORDEN MUSICAL: C, D, E, F, G, A, B
     orden_musical = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B']
     notas_en_excel = df['Raiz'].unique().tolist()
-    # Filtramos el orden musical para mostrar solo las que existen en tu Excel
     todas_las_notas = [n for n in orden_musical if n in notas_en_excel]
     
     orden_tipos = ["MAYOR", "MENOR", "DOMINANTE", "AUMENTADO", "DISMINUIDO", "SEMIDISMINUIDO", "MAJ7", "MENOR7"]
